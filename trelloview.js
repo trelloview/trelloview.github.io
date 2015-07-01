@@ -3,23 +3,48 @@
   window.TRELLOVIEW = window.TRELLOVIEW || {};
   var $ = window.jQuery;
 
+  (function(jsPDFAPI) {
+    jsPDFAPI.saveContext = function() {
+      this.internal.write('q')
+    };
+    jsPDFAPI.restoreContext = function() {
+      this.internal.write('Q')
+    };
+    jsPDFAPI.clipInvisible = function() {
+      this.internal.write('W')
+      this.internal.write('n')
+    };
+  })(jsPDF.API);
+
+  var trelloColours = {
+    green: '61bd4f',
+    yellow: 'f2d600',
+    orange: 'ffab4a',
+    red: 'eb5a46',
+    purple: 'c377e0',
+    blue: '0079bf',
+    pink: 'ff80ce',
+    sky: '00c2e0',
+    lime: '51e898',
+    black: '4d4d4d',
+    grey: '7d7d7d'
+  }, trelloColoursAsTriple = {}
+  
+  $.each(trelloColours, function(key, value) {
+    trelloColoursAsTriple[key] = [
+      (Number('0x' + value.substring(0, 2)) / 255).toString(),
+      (Number('0x' + value.substring(2, 4)) / 255).toString(),
+      (Number('0x' + value.substring(4, 6)) / 255).toString()
+    ]
+  })
+
   function List(listData) {
     this.id = listData.id
     this.name = listData.name
-    this.cards = []
+    this.cards = new CardList
   }
 
-  List.prototype.htmlSummary = function() {
-    return '<li>' + this.name + ' (<a href="#">' + this.cards.length + ' cards</a>) <a href="#" class="printable" data-listid="' + this.id + '">Print</a></li>'
-  }
-
-  List.prototype.htmlCardList = function() {
-    var result = '<li>' + this.name + ' <button type="button" class="btn btn-default btn-sm printable" data-listid="' + this.id + '">Print</button><ol>' + $.map(this.cards, function(card) { return card.htmlSummary() }).join('') + '</ol></li>'
-
-    return result
-  }
-
-  function Label(labelData) {
+  function Label(labelData, allLists) {
     var nameMatches = labelData.name.match("([^:]+): (.*)")
 
     if (nameMatches) {
@@ -32,7 +57,41 @@
 
     this.id = labelData.id
     this.color = labelData.color
-    this.cards = []
+    this.cards = new CardList
+    this.allLists = allLists
+  }
+
+  Label.prototype.calcProperties = function() {
+    this.dateLastActivity = this.calcDateLastActivity()
+  }
+
+  Label.prototype.calcDateLastActivity = function() {
+    var result = null
+    $.each(this.cards.cards, function(index, card) {
+      if (card.dateLastActivity > result) {
+        result = card.dateLastActivity
+      }
+    })
+    return result
+  }
+
+  Label.prototype.lists = function() {
+    var result = [], self = this
+    $.each(this.allLists, function(id, list) {
+      var newList = new List({
+        id: list.id,
+        name: list.name
+      })
+      $.each(self.cards.cards, function(index, card) {
+        if (card.list.id === newList.id) {
+          newList.cards.push(card)
+        }
+      })
+      if (newList.cards.length() > 0) {
+        result.push(newList)
+      }
+    })
+    return result
   }
 
   function LabelType(type) {
@@ -44,22 +103,247 @@
     this.labels.push(label)
   }
 
+  LabelType.prototype.sortedLabels = function() {
+    var labels = this.labels || []
+    labels.sort(function(a, b) {
+      if (a.color && !b.color) return -1
+      if (!a.color && b.color) return 1
+      return (a.dateLastActivity < b.dateLastActivity) ? 1 : ((a.dateLastActivity > b.dateLastActivity) ? -1 : 0)
+    })
+    return labels
+  }
+
+  function CardList() {
+    this.cards = []
+  }
+
+  CardList.prototype.push = function(item) {
+    this.cards.push(item)
+  }
+
+  CardList.prototype.calcProperties = function() {
+  }
+
+  CardList.prototype.all = function() {
+    return this.cards
+  }
+
+  CardList.prototype.length = function() {
+    return this.cards.length
+  }
+
+
   function Card(cardData, list, allLabels) {
     this.list = list
     this.name = cardData.name
+    this.idShort = cardData.idShort
     this.shortUrl = cardData.shortUrl
     this.description = cardData.desc
-    this.labels = $.map(cardData.idLabels, function(labelId) {
-      var label = allLabels[labelId]
-      if (label) {
-        label.cards.push(this)
-      }
-      return label
-    })
+    this.dateLastActivity = Date.parse(cardData.dateLastActivity)
+    this.labels = this.calcLabels(cardData, allLabels)
+    this.labelsByType = this.calcLabelsByType()
+    this.epic = this.labelsByType.Epic ? this.labelsByType.Epic[0] : null
+    this.type = this.labelsByType.Type ? this.labelsByType.Type[0] : null
   }
 
-  Card.prototype.htmlSummary = function() {
-    return '<li><a href="' + this.shortUrl + '">' + this.name + '</a><ol>' + this.labels.map(function(i) { return '<li>' + i.name + '</li>' }).join('') + '</ol></li>'
+  Card.prototype.calcLabels = function(cardData, allLabels) {
+    var self = this, result = []
+    $.each(cardData.idLabels, function(index, labelId) {
+      var label = allLabels[labelId]
+      if (label) {
+        result.push(label)
+      }
+    })
+    return result
+  }
+
+  Card.prototype.calcLabelsByType = function() {
+    var result = Object.create(null)
+    $.each(this.labels, function(index, label) {
+      if (!result[label.type]) {
+        result[label.type] = []
+      }
+      result[label.type].push(label)
+    })
+
+    return result
+  }
+
+  var textInArea = function(doc, text, x1, y1, x2, y2, align) {
+    var lines,
+        lineHeight = doc.getLineHeight(),
+        lineCount = Math.floor((y2 - y1) / lineHeight),
+        descenderProportion = 0.25,
+        x
+
+    doc.saveContext()
+    doc.rect(x1, y1, x2 - x1, y2 - y1, null).clipInvisible()
+
+//doc.setLineWidth(2)
+//doc.setDrawColor("0.00", "0.00", "0.00")
+//doc.rect(x1, y1, x2 - x1, y2 - y1)
+
+    lines = doc.splitTextToSize(text, x2 - x1, {fontName: 'helvetica', fontStyle: 'normal'})
+    if (align === "center") {
+      x = (x1 + x2) / 2
+    } else if (align === "right") {
+      x = x2
+    } else {
+      x = x1
+    }
+
+    doc.text(lines.slice(0, lineCount), x, y1 + lineHeight * (1 - descenderProportion), {}, null, align)
+    doc.restoreContext()
+  }
+
+  var colorTupleForLabel = function(label) {
+    if (label && label.color) {
+      return trelloColoursAsTriple[label.color]
+    } else {
+      return trelloColoursAsTriple.grey
+    }
+  }
+
+  var setDrawColorForLabel = function(doc, label) {
+    var color = colorTupleForLabel(label)
+    doc.setDrawColor(color[0], color[1], color[2])
+  }
+
+  var setFillColorForLabel = function(doc, label) {
+    var color = colorTupleForLabel(label)
+    console.log(label.color, color)
+    doc.setFillColor(color[0], color[1], color[2])
+  }
+
+  Card.prototype.displayLabels = function(doc, type, top, left, width, textMargin, internalLineWidth) {
+    var labels = this.labelsByType[type],
+        lineHeight = doc.getLineHeight(),
+        y_pos = top,
+        boxProportion = 0.8,
+        descenderProportion = 0.25
+
+    if (!labels) {
+      return 0
+    }
+
+    doc.setLineWidth(0.5)
+    doc.setDrawColor("0.00", "0.00", "0.00")
+    $.each(labels, function(index, label) {
+      setFillColorForLabel(doc, label)
+      doc.roundedRect(
+        left + width - lineHeight * boxProportion,
+        y_pos + lineHeight * 0,
+        lineHeight * boxProportion,
+        lineHeight * boxProportion,
+        lineHeight * 0.2,
+        lineHeight * 0.2,
+        "FD"
+      )
+
+      doc.setTextColor("#000000")
+      textInArea(doc, label.name,
+        left,
+        y_pos,
+        left + width - lineHeight * 0.8 - textMargin,
+        y_pos + lineHeight,
+        "right"
+      )
+      y_pos += lineHeight
+    })
+
+    y_pos += lineHeight * descenderProportion + textMargin
+    doc.setDrawColor("0.00", "0.00", "0.00")
+    doc.setLineWidth(internalLineWidth)
+    doc.line(left, y_pos, left + width, y_pos)
+    y_pos += textMargin
+
+    return y_pos - top
+  }
+
+  Card.prototype.toPdf = function(doc) {
+    var mm_to_pt = 2.83464567,
+        width = 152 * mm_to_pt,
+        height = 102 * mm_to_pt,
+        title_size = 25,
+        label_size = 10,
+        paper_margin = 5 * mm_to_pt,
+        card_border_width = 2 * mm_to_pt,
+        internal_line_width = 0.5 * mm_to_pt,
+        text_margin = 2 * mm_to_pt,
+        title_margin = 10 * mm_to_pt,
+        rhs_width = 50 * mm_to_pt - text_margin * 2,
+        rhs_left = width - paper_margin - card_border_width - rhs_width - text_margin,
+        lhs_width = width - paper_margin * 2 - card_border_width * 2 - rhs_width - internal_line_width - text_margin * 4,
+        lhs_left = paper_margin + card_border_width + text_margin,
+        contents_bottom = height - card_border_width - paper_margin - text_margin,
+        contents_top = card_border_width + paper_margin + text_margin,
+        rhs_curr_y_pos,
+        lines,
+        color
+
+    // Border of card, in colour based on Epic
+    doc.setLineWidth(card_border_width)
+    setDrawColorForLabel(doc, this.epic)
+    doc.rect(
+      card_border_width / 2 + paper_margin,
+      card_border_width / 2 + paper_margin,
+      width - card_border_width - paper_margin * 2,
+      height - card_border_width - paper_margin * 2
+    )
+
+    // Internal dividing line, in same colour
+    doc.setDrawColor("0.00", "0.00", "0.00")
+    doc.setLineWidth(internal_line_width)
+    doc.rect(
+      card_border_width + paper_margin,
+      card_border_width + paper_margin,
+      width - card_border_width * 2 - paper_margin * 2,
+      height - card_border_width * 2 - paper_margin * 2
+    )
+    doc.line(
+      rhs_left - text_margin - internal_line_width / 2,
+      card_border_width + paper_margin,
+      rhs_left - text_margin - internal_line_width / 2,
+      height - card_border_width - paper_margin
+    )
+
+    // Card description in LHS
+    doc.setFontSize(title_size)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor("#000000")
+    textInArea(doc, this.name,
+      lhs_left,
+      contents_top,
+      lhs_left + lhs_width,
+      contents_bottom,
+      "center"
+    )
+
+    // Card type, if defined, at top right
+    rhs_curr_y_pos = contents_top
+
+    doc.setFontSize(label_size)
+    rhs_curr_y_pos += this.displayLabels(doc, 'Skill', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
+
+    rhs_curr_y_pos += this.displayLabels(doc, 'Need', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
+
+    rhs_curr_y_pos += this.displayLabels(doc, 'Type', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
+
+
+    doc.setFontSize(label_size)
+    doc.setTextColor("#00FF00")
+    $.each(this.labels, function(index, label) {
+      var lineHeight = doc.getLineHeight()
+      textInArea(doc, label.name,
+        rhs_left,
+        rhs_curr_y_pos,
+        rhs_left + rhs_width,
+        rhs_curr_y_pos + lineHeight
+      )
+      rhs_curr_y_pos += lineHeight
+    })
+
+    doc.text(this.list.name, 20, 20)
   }
 
   TRELLOVIEW = {
@@ -69,6 +353,7 @@
       Trello.setKey(key)
       TRELLOVIEW.boardId = queryParams["b"]
       TRELLOVIEW.view = queryParams["v"] || 'lists'
+      TRELLOVIEW.epicId = queryParams["e"]
 
       TRELLOVIEW.loadTemplates()
       TRELLOVIEW.prepareLayout()
@@ -76,16 +361,22 @@
       TRELLOVIEW.fetchesInProgress = Object.create(null)
       TRELLOVIEW.buildLists()
 
-      TRELLOVIEW.$display.on("click", ".printable", TRELLOVIEW.printPrintable)
+      TRELLOVIEW.$content.on("click", ".printable", TRELLOVIEW.printPrintable)
     },
 
     loadTemplates: function() {
-      TRELLOVIEW.templateLeftNavbar = $('#template-left-navbar').html()
-      Mustache.parse(TRELLOVIEW.templateLeftNavbar);
+      var templates = Object.create(null)
+      $('script[type="x-tmpl-mustache"]').each(function(index, tag) {
+        var templateName = tag.id.replace("template-", "")
+        var templateHtml = $(tag).html()
+        templates[templateName] = templateHtml
+        Mustache.parse(templateHtml);
+      })
+      TRELLOVIEW.templates = templates
     },
 
     prepareLayout: function() {
-      TRELLOVIEW.$display = $("div.js-display")
+      TRELLOVIEW.$content = $("#content")
       TRELLOVIEW.$leftNavbar = $("#left-navbar")
     },
 
@@ -205,12 +496,18 @@
     buildLists: function() {
       var newLists = Object.create(null),
           newLabels = Object.create(null),
-          newCards = [],
+          newCards = new CardList,
           newLabelTypes = Object.create(null)
+
+      if (TRELLOVIEW.listData) {
+        $.each(TRELLOVIEW.listData, function(index, list) {
+          newLists[list.id] = new List(list)
+        })
+      }
 
       if (TRELLOVIEW.labelData) {
         $.each(TRELLOVIEW.labelData, function(index, label) {
-          newLabels[label.id] = new Label(label)
+          newLabels[label.id] = new Label(label, newLists)
         })
 
         $.each(newLabels, function(id, label) {
@@ -219,12 +516,6 @@
             type = newLabelTypes[label.type] = new LabelType(label.type)
           }
           type.push(label)
-        })
-      }
-
-      if (TRELLOVIEW.listData) {
-        $.each(TRELLOVIEW.listData, function(index, list) {
-          newLists[list.id] = new List(list)
         })
       }
 
@@ -240,13 +531,19 @@
               }
             })
 
-            card = new TRELLOVIEW.Card(cardData, list, labels)
+            card = new Card(cardData, list, newLabels)
             list.cards.push(card)
             $.each(labels, function(index, label) {
               label.cards.push(card)
             })
           }
           return card
+        })
+      }
+
+      if (TRELLOVIEW.labelData) {
+        $.each(newLabels, function(index, label) {
+          label.calcProperties()
         })
       }
 
@@ -259,28 +556,58 @@
 
     refreshDisplay: function() {
       TRELLOVIEW.updateNavBar()
-      TRELLOVIEW.displayLists()
+      if (TRELLOVIEW.view == 'lists') {
+        TRELLOVIEW.displayLists()
+      } else if (TRELLOVIEW.view == 'epic') {
+        TRELLOVIEW.displayEpic()
+      }
+    },
+
+    sortedEpics: function() {
+      var labelType = TRELLOVIEW.labelTypes["Epic"],
+          labels;
+      if (labelType) {
+        return labelType.sortedLabels()
+      } else {
+        return []
+      }
+    },
+
+    objectValues: function(object) {
+      return Object.keys(object).map(
+        function(key) {
+          return object[key]
+        }
+      )
+    },
+
+    render: function(templateName, $target, context) {
+      $target.html(Mustache.render(TRELLOVIEW.templates[templateName], context))
     },
 
     updateNavBar: function() {
-      var rendered = Mustache.render(TRELLOVIEW.templateLeftNavbar, {
-        lists_active: TRELLOVIEW.view === 'lists',
-        epics: (TRELLOVIEW.labelTypes["Epic"] || {}).labels,
-        types: Object.keys(TRELLOVIEW.labelTypes).map(
-          function(key) { return TRELLOVIEW.labelTypes[key] }
-        )
+      TRELLOVIEW.render('left-navbar', TRELLOVIEW.$leftNavbar, {
+        boardID: TRELLOVIEW.boardId,
+        listsActive: TRELLOVIEW.view === 'lists',
+        epics: TRELLOVIEW.sortedEpics(),
+        types: TRELLOVIEW.objectValues(TRELLOVIEW.labelTypes)
       })
-      TRELLOVIEW.$leftNavbar.html(rendered);
     },
 
     displayLists: function() {
-      var $lists = $(".lists", TRELLOVIEW.$display);
-              
-      var listHtml = $.map(TRELLOVIEW.lists, function(list) {
-        return list.htmlCardList()
-        return list.htmlSummary()
+      TRELLOVIEW.render('lists', TRELLOVIEW.$content, {
+        lists: TRELLOVIEW.objectValues(TRELLOVIEW.lists)
       })
-      $lists.html(listHtml)
+    },
+
+    displayEpic: function() {
+      var epic = TRELLOVIEW.labels[TRELLOVIEW.epicId]
+      if (!epic) return
+
+      TRELLOVIEW.render('epic', TRELLOVIEW.$content, {
+        epic: epic,
+        lists: epic.lists()
+      })
     },
 
 
@@ -296,21 +623,27 @@
       TRELLOVIEW.printCards(list.cards, list.name)
     },
 
-    printCards: function(cards, name) {
-      var doc = new jsPDF("landscape", "mm", [102, 152]),
+    printCards: function(cardlist, name) {
+      var doc = new jsPDF("landscape", "pt", [102 * 2.83464567, 152 * 2.83464567]),
           firstPage = true;
 
-      $.map(cards, function(card) {
+      delete doc.internal.getFont().metadata.Unicode.kerning[101][84]
+      doc.setProperties({
+        title: 'Title',
+        subject: 'Subject',
+        author: 'trelloview',
+        keywords: 'trello',
+        creator: 'trelloview'
+      });
+
+      $.map(cardlist.all(), function(card) {
         if (firstPage) {
           firstPage = false
         } else {
           doc.addPage()
         }
-        doc.text(20, 20, card.list.name)
-        doc.text(20, 30, card.name)
-        doc.text(20, 40, card.labels.toString())
+        card.toPdf(doc)
       })
-      console.log(doc);
 
       // Save the PDF
       doc.save('cards_' + name + '.pdf');

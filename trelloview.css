@@ -1,0 +1,22 @@
+.label-marker-green {background-color: #61bd4f}
+.label-marker-yellow {background-color: #f2d600}
+.label-marker-orange {background-color: #ffab4a}
+.label-marker-red {background-color: #eb5a46}
+.label-marker-purple {background-color: #c377e0}
+.label-marker-blue {background-color: #0079bf}
+.label-marker-pink {background-color: #ff80ce}
+.label-marker-sky {background-color: #00c2e0}
+.label-marker-lime {background-color: #51e898}
+.label-marker-black {background-color: #4d4d4d}
+
+span.label-marker {
+  width: 1em;
+  height: 0.4em;
+  display: inline-block;
+  margin-right: 0.5em;
+  margin-bottom: 0.1em;
+}
+
+h2 {
+  margin-left: 1em;
+}

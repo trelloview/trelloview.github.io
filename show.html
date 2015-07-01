@@ -18,16 +18,69 @@
 <script src="ext/jstorage.js"></script>
 <script src="ext/mustache.min.js"></script>
 <script src="trelloview.js"></script>
+
 <script id="template-left-navbar" type="x-tmpl-mustache">
-  <li{{#lists_active}} class="active"{{/lists_active}} id="view-lists"><a>Lists</a></li>
+  <li
+    {{ #listsActive }} class="active"{{ /listsActive }}
+    id="view-lists"
+  ><a
+    {{ ^listsActive }} href="?b={{ boardID }}"{{ /listsActive }}
+  >Lists</a></li>
   <li class="dropdown">
     <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Epics<span class="caret"></span></a>
     <ul class="dropdown-menu">
       {{ #epics }}
-        <li><a href="#"><span class="label-marker label-marker-{{ color }}"></span>{{ name }}</a></li>
+        <li><a href="?b={{ boardID }}&v=epic&e={{ id }}"><span class="label-marker label-marker-{{ color }}"></span>{{ name }}</a></li>
       {{ /epics }}
     </ul>
   </li>
+</script>
+
+<script id="template-lists" type="x-tmpl-mustache">
+  <ol class="lists">
+    {{ #lists }}
+      <li>
+        {{ name }}
+        <button type="button" class="btn btn-default btn-sm printable" data-listid="{{ id }}">Print</button>
+        <ol>{{ #cards.cards }}
+          <li>
+            <a href="{{ shortUrl }}">#{{ idShort }}: {{ name }}</a>
+            <ol>
+            {{ #labels }}
+              <li>{{ name }}</li>
+            {{ /labels }}
+            </ol>
+          </li>
+        {{ /cards.cards }}</ol>
+      </li>
+    {{ /lists }}
+  </ol>
+</script>
+
+<script id="template-epic" type="x-tmpl-mustache">
+  <h2>
+    <span class="label-marker label-marker-{{ epic.color }}"></span>{{ epic.name }}</h2>
+
+  <ol class="lists">
+    {{ #lists }}
+      <li>
+        {{ name }}
+        <ol>{{ #cards.cards }}
+          <li>
+            <a href="{{ shortUrl }}">#{{ idShort }}: {{ name }}</a>
+            <ol>
+            {{ #labelsByType.Type }}
+              <li><span class="label-marker label-marker-{{ color }}"></span>{{ name }}</li>
+            {{ /labelsByType.Type }}
+            {{ #labelsByType.Skill }}
+              <li><span class="label-marker label-marker-{{ color }}"></span>{{ name }}</li>
+            {{ /labelsByType.Skill }}
+            </ol>
+          </li>
+        {{ /cards.cards }}</ol>
+      </li>
+    {{ /lists }}
+  </ol>
 </script>
 
 </head>
@@ -54,9 +107,7 @@
 
   <div class="alert alert-danger hidden js-failure-box" role="alert"></div>
 
-  <div class="js-display">
-    <ol class="lists"></ol>
-    <ol class="cards"></ol>
+  <div id="content">
   </div>
 
   <script>

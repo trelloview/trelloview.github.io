@@ -6,14 +6,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
 <link href="bootstrap/css/bootstrap-theme.min.css" rel="stylesheet">
+<link href="trelloview.css" rel="stylesheet">
 
 <title>Show trello cards</title>
 <script src="ext/jquery-2.1.4.min.js"></script>
 <script src="bootstrap/js/bootstrap.min.js"></script>
 <script src="ext/URI.js"></script>
+<script src="ext/trello_client.js"></script>
+<script src="ext/jspdf.js"></script>
+<script src="ext/FileSaver.js"></script>
+<script src="ext/jstorage.js"></script>
+<script src="ext/mustache.min.js"></script>
+<script src="trelloview.js"></script>
 
 </head>
 <body>
-HELLO WORLD
+  <form action="show.html" method="GET">
+    <label for="board_id">Board ID:</label>
+    <input type="text" name="b">
+    <button type="submit">View</button>
+  </form>
+
+  <script>
+    TRELLOVIEW.init(URI.parseQuery(window.location.search))
+  </script>
 </body>
 </html>
