@@ -343,7 +343,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         label_size = 12,
         members_size = 8,
         idSize = 20,
-        paper_margin = 10 * mm_to_pt,
+        paper_margin = 5 * mm_to_pt,
         card_border_width = 2 * mm_to_pt,
         internal_line_width = 0.5 * mm_to_pt,
         text_margin = 2 * mm_to_pt,

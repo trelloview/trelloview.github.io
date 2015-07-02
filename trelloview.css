@@ -20,3 +20,7 @@ span.label-marker {
 h2 {
   margin-left: 1em;
 }
+ol {
+  list-style: none;
+  padding-left: 20;
+}

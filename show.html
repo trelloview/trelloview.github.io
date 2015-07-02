@@ -47,7 +47,7 @@
             <a href="{{ shortUrl }}">#{{ idShort }}: {{ name }}</a>
             <ol>
             {{ #labels }}
-              <li>{{ name }}</li>
+              <li><span class="label-marker label-marker-{{ color }}"></span>{{ type }}: {{ name }}</a></li>
             {{ /labels }}
             </ol>
           </li>
