@@ -16,6 +16,36 @@
     };
   })(jsPDF.API);
 
+  // Used for sorting labels
+  var labelTypePriorities = {
+    "Type": 1,
+    "Need": 2,
+    "Skill": 3,
+    "Epic": 4
+  }
+
+  var actionIsMajor = {
+    /* Checklit actions */
+    "addChecklistToCard": false,
+    "removeChecklistFromCard": false,
+    "updateCheckItemStateOnCard": false,
+
+    /* Comment actions */
+    "commentCard": false,
+
+    /* Attachment actions */
+    "addAttachmentToCard": false,
+    "deleteAttachmentFromCard": false,
+
+    /* Major actions */
+    "moveCardToBoard": true,
+    "createCard": true,
+
+    /* Changing membership of the card */
+    "addMemberToCard": true,
+    "removeMemberFromCard": true,
+  }
+
   var trelloColours = {
     green: '61bd4f',
     yellow: 'f2d600',
@@ -47,6 +77,40 @@
     this.memberType = memberData.memberType
   }
 
+  function Action(actionData, allMembers) {
+    this.id = actionData.id
+    this.data = actionData.data
+    this.date = Date.parse(actionData.date)
+    this.type = actionData.type
+    this.member = allMembers[actionData.idMemberCreator]
+    this.major = this.checkMajor()
+  }
+
+  Action.prototype.checkMajor = function() {
+    var isMajor = actionIsMajor[this.type]
+    if (isMajor === true || isMajor == false) {
+      return isMajor
+    }
+    if (this.type === "updateCard") {
+      $.each(this.data.old, function(key, value) {
+        if (key === "idList" ||
+            key === "idAttachmentCover" ||
+            key === "pos" ||
+            key === "desc" ||
+            key === "due") {
+           // Minor
+        } else if (key === "name") {
+           return true
+        } else {
+          console.log("Unknown key in updateCard action: " + key, this)
+        }
+      })
+      return false
+    } else {
+      console.log("Unknown action type: " + this.type, this)
+    }
+  }
+
   function List(listData) {
     this.id = listData.id
     this.name = listData.name
@@ -72,6 +136,16 @@
 
   Label.prototype.calcProperties = function() {
     this.dateLastActivity = this.calcDateLastActivity()
+  }
+
+  function displayDate(timestamp) {
+    var obj
+    if (timestamp) {
+      obj = new Date(timestamp)
+    } else {
+      obj = new Date()
+    }
+    return obj.getUTCFullYear() + "/" + obj.getUTCMonth() + "/" + obj.getUTCDate()
   }
 
   Label.prototype.calcDateLastActivity = function() {
@@ -142,25 +216,50 @@
   }
 
 
-  function Card(cardData, list, allLabels, allMembers) {
+  function Card(cardData, list, sortedLabels, allMembers) {
     this.list = list
     this.name = cardData.name
     this.idShort = cardData.idShort
     this.shortUrl = cardData.shortUrl
     this.description = cardData.desc
     this.dateLastActivity = Date.parse(cardData.dateLastActivity)
-    this.labels = this.calcLabels(cardData, allLabels)
+    this.dateCreated = this.calcDateCreated(cardData)
+    this.labels = this.calcLabels(cardData, sortedLabels)
     this.members = this.calcMembers(cardData, allMembers)
     this.labelsByType = this.calcLabelsByType()
     this.epic = this.labelsByType.Epic ? this.labelsByType.Epic[0] : null
     this.type = this.labelsByType.Type ? this.labelsByType.Type[0] : null
+    this.actions = $.map(cardData.actions, function(actionData) {
+      return new Action(actionData, allMembers)
+    })
+
+    this.dateLastMajorActivity = this.calcDateLastMajorActivity()
   }
 
-  Card.prototype.calcLabels = function(cardData, allLabels) {
-    var self = this, result = []
-    $.each(cardData.idLabels, function(index, labelId) {
-      var label = allLabels[labelId]
-      if (label) {
+  Card.prototype.calcDateLastMajorActivity = function() {
+    var result = null
+    $.each(this.actions, function(index, action) {
+      if (action.major) {
+        if (result === null || result < action.date) {
+          result = action.date
+        }
+      }
+    })
+    return result
+  }
+
+  Card.prototype.calcDateCreated = function(cardData) {
+    if (cardData.actions) {
+      return Date.parse(cardData.actions[cardData.actions.length - 1].date)
+    } else {
+      return null
+    }
+  }
+
+  Card.prototype.calcLabels = function(cardData, sortedLabels) {
+    var result = []
+    $.each(sortedLabels, function(index, label) {
+      if (cardData.idLabels.indexOf(label.id) != -1) {
         result.push(label)
       }
     })
@@ -196,7 +295,7 @@
         descenderProportion = 0.25,
         x
 
-    console.log("textInArea", text, x, y1, x2 - x1, y2 - y1, align)
+    //console.log("textInArea", text, x, y1, x2 - x1, y2 - y1, align)
 
     doc.saveContext()
     doc.rect(x1, y1, x2 - x1, y2 - y1, null).clipInvisible()
@@ -343,6 +442,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         label_size = 12,
         members_size = 8,
         idSize = 20,
+        metadataSize = 8,
         paper_margin = 5 * mm_to_pt,
         card_border_width = 2 * mm_to_pt,
         internal_line_width = 0.5 * mm_to_pt,
@@ -446,6 +546,18 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         contents_bottom
       )
     }
+
+    doc.setFontSize(metadataSize)
+    doc.setTextColor("#40ff40")
+    textInArea(doc,
+      "Created:" + displayDate(this.dateCreated) +
+      "  MajorUpdate:" + displayDate(this.dateLastMajorActivity) + 
+      "  Printed:" + displayDate(null),
+      lhs_left,
+      contents_bottom + text_margin - doc.getLineHeight(),
+      lhs_left + lhs_width,
+      contents_bottom + text_margin
+    )
   }
 
   TRELLOVIEW = {
@@ -613,6 +725,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     buildLists: function() {
       var newLists = Object.create(null),
           newLabels = Object.create(null),
+          newSortedLabels = [],
           newCards = new CardList,
           newLabelTypes = Object.create(null),
           newMembers = Object.create(null)
@@ -631,10 +744,26 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
       if (TRELLOVIEW.labelData) {
         $.each(TRELLOVIEW.labelData, function(index, label) {
-          newLabels[label.id] = new Label(label, newLists)
+          var newLabel = new Label(label, newLists)
+          newLabels[label.id] = newLabel
+          newSortedLabels.push(newLabel)
         })
 
-        $.each(newLabels, function(id, label) {
+        newSortedLabels.sort(function(a, b) {
+          var p_a = labelTypePriorities[a.type] || 10000,
+              p_b = labelTypePriorities[b.type] || 10000
+
+          if (p_a < p_b) {
+            return -1
+          } else if (p_a > p_b) {
+            return 1
+          }
+          if (a.color && !b.color) return -1
+          if (!a.color && b.color) return 1
+          return (a.dateLastActivity < b.dateLastActivity) ? 1 : ((a.dateLastActivity > b.dateLastActivity) ? -1 : 0)
+        })
+
+        $.each(newSortedLabels, function(_, label) {
           var type = newLabelTypes[label.type]
           if (!type) {
             type = newLabelTypes[label.type] = new LabelType(label.type)
@@ -655,7 +784,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
               }
             })
 
-            card = new Card(cardData, list, newLabels, newMembers)
+            card = new Card(cardData, list, newSortedLabels, newMembers)
             list.cards.push(card)
             $.each(labels, function(index, label) {
               label.cards.push(card)
@@ -674,6 +803,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.members = newMembers
       TRELLOVIEW.lists = newLists
       TRELLOVIEW.labels = newLabels
+      TRELLOVIEW.sortedLabels = newSortedLabels
       TRELLOVIEW.labelTypes = newLabelTypes
       TRELLOVIEW.cards = newCards
       TRELLOVIEW.refreshDisplay()
@@ -781,6 +911,5 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       cards
     }
   };
-  TRELLOVIEW.Card = Card
 
 }());
