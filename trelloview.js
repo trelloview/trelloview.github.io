@@ -38,6 +38,15 @@
     ]
   })
 
+  function Member(memberData) {
+    this.id = memberData.id
+    this.fullName = memberData.fullName
+    this.initials = memberData.initials
+    this.avatarHash = memberData.avatarHash
+    this.username = memberData.username
+    this.memberType = memberData.memberType
+  }
+
   function List(listData) {
     this.id = listData.id
     this.name = listData.name
@@ -133,7 +142,7 @@
   }
 
 
-  function Card(cardData, list, allLabels) {
+  function Card(cardData, list, allLabels, allMembers) {
     this.list = list
     this.name = cardData.name
     this.idShort = cardData.idShort
@@ -141,6 +150,7 @@
     this.description = cardData.desc
     this.dateLastActivity = Date.parse(cardData.dateLastActivity)
     this.labels = this.calcLabels(cardData, allLabels)
+    this.members = this.calcMembers(cardData, allMembers)
     this.labelsByType = this.calcLabelsByType()
     this.epic = this.labelsByType.Epic ? this.labelsByType.Epic[0] : null
     this.type = this.labelsByType.Type ? this.labelsByType.Type[0] : null
@@ -152,6 +162,17 @@
       var label = allLabels[labelId]
       if (label) {
         result.push(label)
+      }
+    })
+    return result
+  }
+
+  Card.prototype.calcMembers = function(cardData, allMembers) {
+    var self = this, result = []
+    $.each(cardData.idMembers, function(index, memberId) {
+      var member = allMembers[memberId]
+      if (member) {
+        result.push(member)
       }
     })
     return result
@@ -172,16 +193,19 @@
   var textInArea = function(doc, text, x1, y1, x2, y2, align) {
     var lines,
         lineHeight = doc.getLineHeight(),
-        lineCount = Math.floor((y2 - y1) / lineHeight),
         descenderProportion = 0.25,
         x
+
+    console.log("textInArea", text, x, y1, x2 - x1, y2 - y1, align)
 
     doc.saveContext()
     doc.rect(x1, y1, x2 - x1, y2 - y1, null).clipInvisible()
 
-//doc.setLineWidth(2)
-//doc.setDrawColor("0.00", "0.00", "0.00")
-//doc.rect(x1, y1, x2 - x1, y2 - y1)
+/*
+doc.setLineWidth(1)
+doc.setDrawColor("0.00", "0.70", "0.00")
+doc.rect(x1, y1, x2 - x1, y2 - y1)
+*/
 
     lines = doc.splitTextToSize(text, x2 - x1, {fontName: 'helvetica', fontStyle: 'normal'})
     if (align === "center") {
@@ -192,7 +216,7 @@
       x = x1
     }
 
-    doc.text(lines.slice(0, lineCount), x, y1 + lineHeight * (1 - descenderProportion), {}, null, align)
+    doc.text(lines, x, y1 + lineHeight * (1 - descenderProportion), {}, null, align)
     doc.restoreContext()
   }
 
@@ -211,12 +235,62 @@
 
   var setFillColorForLabel = function(doc, label) {
     var color = colorTupleForLabel(label)
-    console.log(label.color, color)
     doc.setFillColor(color[0], color[1], color[2])
   }
 
-  Card.prototype.displayLabels = function(doc, type, top, left, width, textMargin, internalLineWidth) {
-    var labels = this.labelsByType[type],
+  Card.prototype.displayLabelBox = function(doc, label, left, top) {
+    var boxProportion = 0.8,
+        lineHeight = doc.getLineHeight()
+
+    doc.setLineWidth(0.5)
+    doc.setDrawColor("0.00", "0.00", "0.00")
+    setFillColorForLabel(doc, label)
+
+    doc.roundedRect(
+      left,
+      top,
+      lineHeight * boxProportion,
+      lineHeight * boxProportion,
+      lineHeight * 0.2,
+      lineHeight * 0.2,
+      "FD"
+    )
+  }
+
+  Card.prototype.displayMembers = function(doc, top, bottom, left, width, textMargin) {
+    var self = this,
+        y_pos,
+        lineHeight = doc.getLineHeight() + textMargin,
+        descenderProportion = 0.25
+
+    if (!this.members) {
+      return 0
+    }
+
+    y_pos = bottom - lineHeight - textMargin 
+    $.each(this.members, function(index, member) {
+      doc.setTextColor("#000000")
+
+      doc.setLineWidth(1)
+      doc.setDrawColor("0.00", "0.00", "0.00")
+      doc.setFillColor("1.00", "1.00", "0.00")
+      doc.rect(left, y_pos, width, lineHeight, "FD")
+
+      textInArea(doc, member.fullName,
+        left,
+        y_pos + textMargin / 2,
+        left + width,
+        y_pos + lineHeight + textMargin / 2,
+        "center"
+      )
+      y_pos -= lineHeight + textMargin
+    })
+
+  }
+
+  Card.prototype.displayLabels = function(doc, type, heading, top, left, width, textMargin, internalLineWidth) {
+    var self = this,
+        labels = this.labelsByType[type],
         lineHeight = doc.getLineHeight(),
         y_pos = top,
         boxProportion = 0.8,
@@ -226,21 +300,16 @@
       return 0
     }
 
-    doc.setLineWidth(0.5)
-    doc.setDrawColor("0.00", "0.00", "0.00")
+    doc.setTextColor("#000000")
+    if (heading) {
+      textInArea(doc, heading, left, y_pos, left + width, y_pos + lineHeight)
+    }
+
     $.each(labels, function(index, label) {
-      setFillColorForLabel(doc, label)
-      doc.roundedRect(
-        left + width - lineHeight * boxProportion,
-        y_pos + lineHeight * 0,
-        lineHeight * boxProportion,
-        lineHeight * boxProportion,
-        lineHeight * 0.2,
-        lineHeight * 0.2,
-        "FD"
-      )
+      self.displayLabelBox(doc, label, left + width - lineHeight * boxProportion, y_pos)
 
       doc.setTextColor("#000000")
+
       textInArea(doc, label.name,
         left,
         y_pos,
@@ -252,10 +321,16 @@
     })
 
     y_pos += lineHeight * descenderProportion + textMargin
+
     doc.setDrawColor("0.00", "0.00", "0.00")
     doc.setLineWidth(internalLineWidth)
-    doc.line(left, y_pos, left + width, y_pos)
-    y_pos += textMargin
+    doc.line(
+      left,
+      y_pos + internalLineWidth / 2,
+      left + width,
+      y_pos + internalLineWidth / 2
+    )
+    y_pos += internalLineWidth + textMargin
 
     return y_pos - top
   }
@@ -265,21 +340,24 @@
         width = 152 * mm_to_pt,
         height = 102 * mm_to_pt,
         title_size = 25,
-        label_size = 10,
-        paper_margin = 5 * mm_to_pt,
+        label_size = 12,
+        members_size = 8,
+        idSize = 20,
+        paper_margin = 10 * mm_to_pt,
         card_border_width = 2 * mm_to_pt,
         internal_line_width = 0.5 * mm_to_pt,
         text_margin = 2 * mm_to_pt,
         title_margin = 10 * mm_to_pt,
         rhs_width = 50 * mm_to_pt - text_margin * 2,
-        rhs_left = width - paper_margin - card_border_width - rhs_width - text_margin,
-        lhs_width = width - paper_margin * 2 - card_border_width * 2 - rhs_width - internal_line_width - text_margin * 4,
-        lhs_left = paper_margin + card_border_width + text_margin,
-        contents_bottom = height - card_border_width - paper_margin - text_margin,
-        contents_top = card_border_width + paper_margin + text_margin,
+        rhs_left = width - paper_margin - card_border_width - rhs_width - text_margin - internal_line_width,
+        lhs_width = width - paper_margin * 2 - card_border_width * 2 - rhs_width - internal_line_width * 3 - text_margin * 4,
+        lhs_left = paper_margin + card_border_width + text_margin + internal_line_width,
+        contents_bottom = height - card_border_width - paper_margin - text_margin - internal_line_width,
+        contents_top = card_border_width + paper_margin + text_margin + internal_line_width,
         rhs_curr_y_pos,
         lines,
-        color
+        color,
+        descenderProportion = 0.25
 
     // Border of card, in colour based on Epic
     doc.setLineWidth(card_border_width)
@@ -291,21 +369,46 @@
       height - card_border_width - paper_margin * 2
     )
 
-    // Internal dividing line, in same colour
+    // Internal dividing lines and border, in black
     doc.setDrawColor("0.00", "0.00", "0.00")
     doc.setLineWidth(internal_line_width)
     doc.rect(
-      card_border_width + paper_margin,
-      card_border_width + paper_margin,
-      width - card_border_width * 2 - paper_margin * 2,
-      height - card_border_width * 2 - paper_margin * 2
+      card_border_width + internal_line_width / 2 + paper_margin,
+      card_border_width + internal_line_width / 2 + paper_margin,
+      width - card_border_width * 2 - paper_margin * 2 - internal_line_width,
+      height - card_border_width * 2 - paper_margin * 2 - internal_line_width
     )
+
     doc.line(
       rhs_left - text_margin - internal_line_width / 2,
       card_border_width + paper_margin,
       rhs_left - text_margin - internal_line_width / 2,
       height - card_border_width - paper_margin
     )
+    doc.rect(
+      card_border_width + internal_line_width + paper_margin,
+      card_border_width + internal_line_width + paper_margin,
+      width - card_border_width * 2 - paper_margin * 2 - internal_line_width * 2,
+      height - card_border_width * 2 - paper_margin * 2 - internal_line_width * 2,
+      null
+    ).clipInvisible()
+
+    // Card type as coloured box at top left
+    doc.setFontSize(label_size)
+    if (this.type) {
+      doc.setLineWidth(0.5)
+      doc.setDrawColor("0.00", "0.00", "0.00")
+      setFillColorForLabel(doc, this.type)
+      doc.triangle(
+        lhs_left - text_margin - 10,
+        contents_top - text_margin - 10,
+        lhs_left + text_margin + 20,
+        contents_top - text_margin - 10,
+        lhs_left - text_margin - 10,
+        contents_top + text_margin + 20,
+        "FD"
+      )
+    }
 
     // Card description in LHS
     doc.setFontSize(title_size)
@@ -319,31 +422,30 @@
       "center"
     )
 
-    // Card type, if defined, at top right
+    // Labels on RHS
+    doc.setFontSize(label_size)
+    doc.setFont('helvetica', 'normal')
     rhs_curr_y_pos = contents_top
 
-    doc.setFontSize(label_size)
-    rhs_curr_y_pos += this.displayLabels(doc, 'Skill', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
+    rhs_curr_y_pos += this.displayLabels(doc, 'Need', 'Need:', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
 
-    rhs_curr_y_pos += this.displayLabels(doc, 'Need', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
+    rhs_curr_y_pos += this.displayLabels(doc, 'Skill', 'Skill:', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
 
-    rhs_curr_y_pos += this.displayLabels(doc, 'Type', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
+    rhs_curr_y_pos += this.displayLabels(doc, 'Epic', null, rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
 
+    doc.setFontSize(members_size)
+    this.displayMembers(doc, contents_top, contents_bottom, rhs_left, rhs_width, text_margin)
 
-    doc.setFontSize(label_size)
-    doc.setTextColor("#00FF00")
-    $.each(this.labels, function(index, label) {
-      var lineHeight = doc.getLineHeight()
-      textInArea(doc, label.name,
-        rhs_left,
-        rhs_curr_y_pos,
-        rhs_left + rhs_width,
-        rhs_curr_y_pos + lineHeight
+    if (this.idShort) {
+      doc.setFontSize(idSize)
+      doc.setTextColor("#404040")
+      textInArea(doc, '#' + this.idShort.toString(),
+        lhs_left,
+        contents_bottom - doc.getLineHeight() * (1 + descenderProportion),
+        lhs_left + lhs_width,
+        contents_bottom
       )
-      rhs_curr_y_pos += lineHeight
-    })
-
-    doc.text(this.list.name, 20, 20)
+    }
   }
 
   TRELLOVIEW = {
@@ -385,6 +487,7 @@
       TRELLOVIEW.fetchLabels()
       TRELLOVIEW.fetchLists()
       TRELLOVIEW.fetchCards()
+      TRELLOVIEW.fetchMembers()
     },
 
     startFetch: function(name) {
@@ -471,6 +574,15 @@
       }, TRELLOVIEW.updateCards)
     },
 
+    fetchMembers: function() {
+      TRELLOVIEW.fetchSomething("members", "trello.members", function() {
+        return Trello.boards.get(TRELLOVIEW.boardId + "/members", {
+          "fields": "fullName,username,avatarHash,initials,memberType"
+        })
+      }, TRELLOVIEW.updateMembers)
+    },
+
+
 
     updateMainData: function(responseObj) {
       var $title = $(".board-title")
@@ -488,6 +600,11 @@
       TRELLOVIEW.buildLists()
     },
 
+    updateMembers: function(responseObj) {
+      TRELLOVIEW.memberData = responseObj
+      TRELLOVIEW.buildLists()
+    },
+
     updateLabels: function(responseObj) {
       TRELLOVIEW.labelData = responseObj
       TRELLOVIEW.buildLists()
@@ -497,7 +614,14 @@
       var newLists = Object.create(null),
           newLabels = Object.create(null),
           newCards = new CardList,
-          newLabelTypes = Object.create(null)
+          newLabelTypes = Object.create(null),
+          newMembers = Object.create(null)
+
+      if (TRELLOVIEW.memberData) {
+        $.each(TRELLOVIEW.memberData, function(index, member) {
+          newMembers[member.id] = new Member(member)
+        })
+      }
 
       if (TRELLOVIEW.listData) {
         $.each(TRELLOVIEW.listData, function(index, list) {
@@ -531,7 +655,7 @@
               }
             })
 
-            card = new Card(cardData, list, newLabels)
+            card = new Card(cardData, list, newLabels, newMembers)
             list.cards.push(card)
             $.each(labels, function(index, label) {
               label.cards.push(card)
@@ -547,6 +671,7 @@
         })
       }
 
+      TRELLOVIEW.members = newMembers
       TRELLOVIEW.lists = newLists
       TRELLOVIEW.labels = newLabels
       TRELLOVIEW.labelTypes = newLabelTypes
@@ -627,7 +752,10 @@
       var doc = new jsPDF("landscape", "pt", [102 * 2.83464567, 152 * 2.83464567]),
           firstPage = true;
 
+      delete doc.internal.getFont().metadata.Unicode.kerning[97][84]
       delete doc.internal.getFont().metadata.Unicode.kerning[101][84]
+      delete doc.internal.getFont().metadata.Unicode.kerning[114][84]
+      delete doc.internal.getFont().metadata.Unicode.kerning[117][84]
       doc.setProperties({
         title: 'Title',
         subject: 'Subject',
@@ -636,7 +764,7 @@
         creator: 'trelloview'
       });
 
-      $.map(cardlist.all(), function(card) {
+      $.each(cardlist.all(), function(index, card) {
         if (firstPage) {
           firstPage = false
         } else {
