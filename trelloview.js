@@ -118,17 +118,23 @@
     this.cards = new CardList
   }
 
-  CardList.prototype.filtered = function(filter_fmd) {
+  CardList.prototype.filtered = function(filter_fmd, filter_fd) {
     var result = []
     if (filter_fmd) {
       filter_fmd = Date.parse(filter_fmd)
     }
+    if (filter_fd) {
+      filter_fd = Date.parse(filter_fd)
+    }
     $.each(this.cards, function(index, card) {
-      if (filter_fmd) {
-        if (card.dateLastMajorActivity >= filter_fmd) {
-          result.push(card)
-        }
-      } else {
+      var wanted = true
+      if (filter_fmd && card.dateLastMajorActivity < filter_fmd) {
+        wanted = false
+      }
+      if (filter_fd && card.dateLastActivity < filter_fd) {
+        wanted = false
+      }
+      if (wanted) {
         result.push(card)
       }
     })
@@ -313,8 +319,6 @@
         lineHeight = doc.getLineHeight(),
         descenderProportion = 0.25,
         x
-
-    //console.log("textInArea", text, x, y1, x2 - x1, y2 - y1, align)
 
     doc.saveContext()
     doc.rect(x1, y1, x2 - x1, y2 - y1, null).clipInvisible()
@@ -588,6 +592,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.view = queryParams["v"] || 'lists'
       TRELLOVIEW.epicId = queryParams["e"]
       TRELLOVIEW.filter_fmd = queryParams["fmd"]
+      TRELLOVIEW.filter_fd = queryParams["fd"]
 
       TRELLOVIEW.loadTemplates()
       TRELLOVIEW.prepareLayout()
@@ -598,10 +603,13 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.$content.on("click", ".printable", TRELLOVIEW.printPrintable)
       TRELLOVIEW.$filters.on("change", "#fmd", TRELLOVIEW.updateDate)
       TRELLOVIEW.$filters.on("blur", "#fmd", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("change", "#fd", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("blur", "#fd", TRELLOVIEW.updateDate)
     },
 
     updateDate: function(e) {
-      TRELLOVIEW.filter_fmd = e.target.value
+      TRELLOVIEW.filter_fmd = $("#fmd").val()
+      TRELLOVIEW.filter_fd = $("#fd").val()
       TRELLOVIEW.refreshDisplay()
       return false
     },
@@ -880,15 +888,6 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       })
     },
 
-    passedFilters: function(card) {
-      var fmd = TRELLOVIEW.filter_fmd
-      if (!fmd) {
-        return true
-      }
-
-      console.log(card.dateLastMajorActivity, fmd)
-    },
-
     updateFilters: function(show) {
       if (TRELLOVIEW.filtersShown) {
         if (!show) {
@@ -900,6 +899,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
           TRELLOVIEW.render('filters', TRELLOVIEW.$filters, {
             boardID: TRELLOVIEW.boardId,
             fmd: TRELLOVIEW.filter_fmd,
+            fd: TRELLOVIEW.filter_fd,
           })
           TRELLOVIEW.$filters.show()
           TRELLOVIEW.filtersShown = true
@@ -910,7 +910,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     displayLists: function() {
       var lists = []
       $.each(TRELLOVIEW.lists, function(key, value) {
-        var filteredCards = value.cards.filtered(TRELLOVIEW.filter_fmd)
+        var filteredCards = value.cards.filtered(TRELLOVIEW.filter_fmd, TRELLOVIEW.filter_fd)
         lists.push({
           name: value.name,
           id: value.id,
@@ -937,7 +937,6 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       var $target = $(target.target),
           data = $target.data(),
           listId = data["listid"]
-      console.log($target)
       TRELLOVIEW.printList(listId)
     },
 
@@ -962,7 +961,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         creator: 'trelloview'
       });
 
-      $.each(cardlist.filtered(TRELLOVIEW.filter_fmd), function(index, card) {
+      $.each(cardlist.filtered(TRELLOVIEW.filter_fmd, TRELLOVIEW.filter_fd), function(index, card) {
         if (firstPage) {
           firstPage = false
         } else {
