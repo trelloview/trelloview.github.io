@@ -6,11 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
 <link href="bootstrap/css/bootstrap-theme.min.css" rel="stylesheet">
+<link href="bootstrap-select/css/bootstrap-select.min.css" rel="stylesheet">
 <link href="trelloview.css" rel="stylesheet">
 
 <title>Show trello cards</title>
 <script src="ext/jquery-2.1.4.min.js"></script>
 <script src="bootstrap/js/bootstrap.min.js"></script>
+<script src="bootstrap-select/js/bootstrap-select.min.js"></script>
 <script src="ext/URI.js"></script>
 <script src="ext/trello_client.js"></script>
 <script src="ext/jspdf.js"></script>
@@ -26,33 +28,47 @@
   ><a
     {{ ^listsActive }} href="?b={{ boardID }}"{{ /listsActive }}
   >Lists</a></li>
-  <li class="dropdown">
-    <a class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Epics<span class="caret"></span></a>
-    <ul class="dropdown-menu">
-      {{ #epics }}
-        <li><a href="?b={{ boardID }}&v=epic&e={{ id }}"><span class="label-marker label-marker-{{ color }}"></span>{{ name }}</a></li>
-      {{ /epics }}
-    </ul>
-  </li>
 </script>
 
 <script id="template-filters" type="x-tmpl-mustache">
   <form method="GET" id="filter-form">
     <input type="hidden" name="b" value="{{ boardID }}">
-    <label for="update_since">Filter: updated since</label>
-    <input type="date" name="update_since" id="update_since" value="{{ update_since }}">
-    <input type="checkbox" name="major_updates" id="major_updates" value="1"
-    {{ #major_updates }} checked {{ /major_updates }}>
-    <label for="major_updates">Major updates only</label></br>
+    <div>
+      <label for="update_since">Filter: updated since</label>
+      <input type="date" name="update_since" id="update_since" value="{{ update_since }}"><br>
+      <input type="checkbox" name="major_updates" id="major_updates" value="1" {{ #major_updates }} checked {{ /major_updates }}>
+      <label for="major_updates">Only filter on updates which affect printed version of card</label>
+    </div>
+    <div>
+      <label for="filter_epic">Filter to epic: </label>
+      <select name="e" id="filter_epic" class="selectpicker show-tick" data-live-search="true">
+        <option value="" {{ #show_all_epics }}selected=selected{{ /show_all_epics}}>All</option>
+        <option value="NONE" {{ #show_no_epics }}selected=selected{{ /show_no_epics }}>Not tagged to any epics</option>
+        <option data-divider="true"></option>
+        {{ #epics }}
+          <option value="{{ id }}" {{ #selected }}selected=selected{{ /selected }} data-content="<span class='label-marker label-marker-{{ color }}'></span>{{ name }}"></option>
+        {{ /epics }}
+      </select>
+    </div>
     <input type="submit" class="hidden"/>
   </form>
 </script>
 
 <script id="template-lists" type="x-tmpl-mustache">
+  <hr>
   <ol class="lists">
+    {{ ^lists }}
+      <li>No cards matching filters</li>
+    {{ /lists }}
+    {{ #lists.length }}
+      <li>
+        <button type="button" class="btn btn-default btn-sm printable" data-listid="ALL">Print cards from all columns</button>
+      </li>
+    {{ /lists.length }}
     {{ #lists }}
       <li>
-        {{ name }}
+        <hr>
+        <h3>{{ name }}</h3>
         <button type="button" class="btn btn-default btn-sm printable" data-listid="{{ id }}">Print</button>
         <ol>{{ #cards.cards }}
           <li>

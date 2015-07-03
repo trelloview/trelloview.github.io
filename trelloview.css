@@ -22,5 +22,8 @@ h2 {
 }
 ol {
   list-style: none;
-  padding-left: 20;
+  padding-left: 20px;
+}
+.lists>li {
+  margin-top: 20px;
 }

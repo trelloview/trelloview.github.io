@@ -118,8 +118,9 @@
     this.cards = new CardList
   }
 
-  CardList.prototype.filtered = function(update_since, major_updates) {
-    var result = []
+  CardList.prototype.filtered = function(update_since, major_updates, epicId) {
+    var result = [], cardEpics
+
     if (update_since) {
       update_since = Date.parse(update_since)
     }
@@ -130,6 +131,24 @@
           wanted = false
         } else if (card.dateLastActivity < update_since) {
           wanted = false
+        }
+      }
+      if (wanted && epicId) {
+        cardEpics = card.labelsByType.Epic || []
+        if (epicId === "NONE") {
+          if (cardEpics.length > 0) {
+            wanted = false
+          }
+        } else {
+          var foundMatch = false
+          $.each(cardEpics, function(index, cardEpic) {
+            if (cardEpic.id === epicId) {
+              foundMatch = true
+            }
+          })
+          if (!foundMatch) {
+            wanted = false
+          }
         }
       }
       if (wanted) {
@@ -599,16 +618,18 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.buildLists()
 
       TRELLOVIEW.$content.on("click", ".printable", TRELLOVIEW.printPrintable)
-      TRELLOVIEW.$filters.on("change", "#update_since", TRELLOVIEW.updateDate)
-      TRELLOVIEW.$filters.on("blur", "#update_since", TRELLOVIEW.updateDate)
-      TRELLOVIEW.$filters.on("change", "#major_updates", TRELLOVIEW.updateDate)
-      TRELLOVIEW.$filters.on("blur", "#major_updates", TRELLOVIEW.updateDate)
-      TRELLOVIEW.$filters.on("submit", "#filter-form", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("change", "#update_since", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("blur", "#update_since", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "#major_updates", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("blur", "#major_updates", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "#filter_epic", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("submit", "#filter-form", TRELLOVIEW.filterFormChanged)
     },
 
-    updateDate: function(e) {
+    filterFormChanged: function(e) {
       TRELLOVIEW.update_since = $("#update_since").val()
       TRELLOVIEW.major_updates = $("#major_updates").prop("checked")
+      TRELLOVIEW.epicId = $("#filter_epic").val()
       TRELLOVIEW.updateLocation()
       TRELLOVIEW.refreshDisplay()
       return false
@@ -835,7 +856,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       }
 
       if (TRELLOVIEW.cardData) {
-        newCards = TRELLOVIEW.cardData.map(function(cardData) {
+        $.each(TRELLOVIEW.cardData, function(index, cardData) {
           var list = newLists[cardData.idList],
               card, labels = []
           if (list) {
@@ -852,7 +873,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
               label.cards.push(card)
             })
           }
-          return card
+          newCards.push(card)
         })
       }
 
@@ -915,33 +936,47 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     },
 
     updateFilters: function(show) {
-      if (TRELLOVIEW.filtersShown) {
-        if (!show) {
+      var epics = []
+      if (TRELLOVIEW.labelTypes && TRELLOVIEW.labelTypes.Epic) {
+        $.each(TRELLOVIEW.labelTypes.Epic.labels, function(index, epic) {
+          epics.push({
+            name: epic.name,
+            id: epic.id,
+            color: epic.color,
+            selected: epic.id === TRELLOVIEW.epicId,
+          })
+        })
+      }
+      if (TRELLOVIEW.filtersShown && !show) {
           TRELLOWVIEW.$filters.hide()
           TRELLOVIEW.filtersShown = false
-        }
-      } else {
-        if (show) {
-          TRELLOVIEW.render('filters', TRELLOVIEW.$filters, {
-            boardID: TRELLOVIEW.boardId,
-            update_since: TRELLOVIEW.update_since,
-            major_updates: TRELLOVIEW.major_updates,
-          })
-          TRELLOVIEW.$filters.show()
-          TRELLOVIEW.filtersShown = true
-        }
+      } else if (show && (!TRELLOVIEW.filtersShown || epics != TRELLOVIEW.shownEpics)) {
+        TRELLOVIEW.shownEpics = epics
+        TRELLOVIEW.render('filters', TRELLOVIEW.$filters, {
+          boardID: TRELLOVIEW.boardId,
+          update_since: TRELLOVIEW.update_since,
+          major_updates: TRELLOVIEW.major_updates,
+          epics: epics,
+          show_all_epics: !TRELLOVIEW.epicId,
+          show_no_epics: TRELLOVIEW.epicId == "NONE",
+        })
+        $('.selectpicker').selectpicker()
+        TRELLOVIEW.$filters.show()
+        TRELLOVIEW.filtersShown = true
       }
     },
 
     displayLists: function() {
       var lists = []
       $.each(TRELLOVIEW.lists, function(key, value) {
-        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates)
-        lists.push({
-          name: value.name,
-          id: value.id,
-          cards: { cards: filteredCards }
-        })
+        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId)
+        if (filteredCards.length > 0) {
+          lists.push({
+            name: value.name,
+            id: value.id,
+            cards: { cards: filteredCards }
+          })
+        }
       })
       TRELLOVIEW.render('lists', TRELLOVIEW.$content, {
         lists: lists
@@ -963,7 +998,15 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       var $target = $(target.target),
           data = $target.data(),
           listId = data["listid"]
-      TRELLOVIEW.printList(listId)
+      if (listId === "ALL") {
+        TRELLOVIEW.printAll()
+      } else {
+        TRELLOVIEW.printList(listId)
+      }
+    },
+
+    printAll: function() {
+      TRELLOVIEW.printCards(TRELLOVIEW.cards, "all")
     },
 
     printList: function(listId) {
@@ -987,7 +1030,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         creator: 'trelloview'
       });
 
-      $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates), function(index, card) {
+      $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId), function(index, card) {
         if (firstPage) {
           firstPage = false
         } else {
