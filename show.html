@@ -36,6 +36,15 @@
   </li>
 </script>
 
+<script id="template-filters" type="x-tmpl-mustache">
+  <form method="GET">
+    <input type="hidden" name="b" value="{{ boardID }}">
+    <label for="fmd">Filter: major updates after</label>
+    <input type="date" name="fmd" id="fmd" value="{{ fmd }}">
+    <input type="submit" />
+  </form>
+</script>
+
 <script id="template-lists" type="x-tmpl-mustache">
   <ol class="lists">
     {{ #lists }}
@@ -107,6 +116,8 @@
 
   <div class="alert alert-danger hidden js-failure-box" role="alert"></div>
 
+  <div id="filters">
+  </div>
   <div id="content">
   </div>
 

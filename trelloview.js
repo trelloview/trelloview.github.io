@@ -59,7 +59,7 @@
     black: '4d4d4d',
     grey: '7d7d7d'
   }, trelloColoursAsTriple = {}
-  
+
   $.each(trelloColours, function(key, value) {
     trelloColoursAsTriple[key] = [
       (Number('0x' + value.substring(0, 2)) / 255).toString(),
@@ -92,6 +92,7 @@
       return isMajor
     }
     if (this.type === "updateCard") {
+      isMajor = false
       $.each(this.data.old, function(key, value) {
         if (key === "idList" ||
             key === "idAttachmentCover" ||
@@ -100,12 +101,12 @@
             key === "due") {
            // Minor
         } else if (key === "name") {
-           return true
+           isMajor = true
         } else {
           console.log("Unknown key in updateCard action: " + key, this)
         }
       })
-      return false
+      return isMajor
     } else {
       console.log("Unknown action type: " + this.type, this)
     }
@@ -116,6 +117,24 @@
     this.name = listData.name
     this.cards = new CardList
   }
+
+  CardList.prototype.filtered = function(filter_fmd) {
+    var result = []
+    if (filter_fmd) {
+      filter_fmd = Date.parse(filter_fmd)
+    }
+    $.each(this.cards, function(index, card) {
+      if (filter_fmd) {
+        if (card.dateLastMajorActivity >= filter_fmd) {
+          result.push(card)
+        }
+      } else {
+        result.push(card)
+      }
+    })
+    return result
+  }
+
 
   function Label(labelData, allLists) {
     var nameMatches = labelData.name.match("([^:]+): (.*)")
@@ -366,7 +385,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       return 0
     }
 
-    y_pos = bottom - lineHeight - textMargin 
+    y_pos = bottom - lineHeight - textMargin
     $.each(this.members, function(index, member) {
       doc.setTextColor("#000000")
 
@@ -551,7 +570,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     doc.setTextColor("#40ff40")
     textInArea(doc,
       "Created:" + displayDate(this.dateCreated) +
-      "  MajorUpdate:" + displayDate(this.dateLastMajorActivity) + 
+      "  MajorUpdate:" + displayDate(this.dateLastMajorActivity) +
       "  Printed:" + displayDate(null),
       lhs_left,
       contents_bottom + text_margin - doc.getLineHeight(),
@@ -568,6 +587,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.boardId = queryParams["b"]
       TRELLOVIEW.view = queryParams["v"] || 'lists'
       TRELLOVIEW.epicId = queryParams["e"]
+      TRELLOVIEW.filter_fmd = queryParams["fmd"]
 
       TRELLOVIEW.loadTemplates()
       TRELLOVIEW.prepareLayout()
@@ -576,6 +596,14 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.buildLists()
 
       TRELLOVIEW.$content.on("click", ".printable", TRELLOVIEW.printPrintable)
+      TRELLOVIEW.$filters.on("change", "#fmd", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("blur", "#fmd", TRELLOVIEW.updateDate)
+    },
+
+    updateDate: function(e) {
+      TRELLOVIEW.filter_fmd = e.target.value
+      TRELLOVIEW.refreshDisplay()
+      return false
     },
 
     loadTemplates: function() {
@@ -592,6 +620,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     prepareLayout: function() {
       TRELLOVIEW.$content = $("#content")
       TRELLOVIEW.$leftNavbar = $("#left-navbar")
+      TRELLOVIEW.$filters = $("#filters")
     },
 
     fetch: function() {
@@ -812,8 +841,10 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     refreshDisplay: function() {
       TRELLOVIEW.updateNavBar()
       if (TRELLOVIEW.view == 'lists') {
+        TRELLOVIEW.updateFilters(true)
         TRELLOVIEW.displayLists()
       } else if (TRELLOVIEW.view == 'epic') {
+        TRELLOVIEW.updateFilters(false)
         TRELLOVIEW.displayEpic()
       }
     },
@@ -849,9 +880,45 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       })
     },
 
+    passedFilters: function(card) {
+      var fmd = TRELLOVIEW.filter_fmd
+      if (!fmd) {
+        return true
+      }
+
+      console.log(card.dateLastMajorActivity, fmd)
+    },
+
+    updateFilters: function(show) {
+      if (TRELLOVIEW.filtersShown) {
+        if (!show) {
+          TRELLOWVIEW.$filters.hide()
+          TRELLOVIEW.filtersShown = false
+        }
+      } else {
+        if (show) {
+          TRELLOVIEW.render('filters', TRELLOVIEW.$filters, {
+            boardID: TRELLOVIEW.boardId,
+            fmd: TRELLOVIEW.filter_fmd,
+          })
+          TRELLOVIEW.$filters.show()
+          TRELLOVIEW.filtersShown = true
+        }
+      }
+    },
+
     displayLists: function() {
+      var lists = []
+      $.each(TRELLOVIEW.lists, function(key, value) {
+        var filteredCards = value.cards.filtered(TRELLOVIEW.filter_fmd)
+        lists.push({
+          name: value.name,
+          id: value.id,
+          cards: { cards: filteredCards }
+        })
+      })
       TRELLOVIEW.render('lists', TRELLOVIEW.$content, {
-        lists: TRELLOVIEW.objectValues(TRELLOVIEW.lists)
+        lists: lists
       })
     },
 
@@ -870,6 +937,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       var $target = $(target.target),
           data = $target.data(),
           listId = data["listid"]
+      console.log($target)
       TRELLOVIEW.printList(listId)
     },
 
@@ -894,7 +962,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         creator: 'trelloview'
       });
 
-      $.each(cardlist.all(), function(index, card) {
+      $.each(cardlist.filtered(TRELLOVIEW.filter_fmd), function(index, card) {
         if (firstPage) {
           firstPage = false
         } else {
