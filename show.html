@@ -37,13 +37,14 @@
 </script>
 
 <script id="template-filters" type="x-tmpl-mustache">
-  <form method="GET">
+  <form method="GET" id="filter-form">
     <input type="hidden" name="b" value="{{ boardID }}">
-    <label for="fmd">Filter: major updates after</label>
-    <input type="date" name="fmd" id="fmd" value="{{ fmd }}"><br>
-    <label for="fd">Filter: any updates after</label>
-    <input type="date" name="fd" id="fd" value="{{ fd }}"><br>
-    <input type="submit" />
+    <label for="update_since">Filter: updated since</label>
+    <input type="date" name="update_since" id="update_since" value="{{ update_since }}">
+    <input type="checkbox" name="major_updates" id="major_updates" value="1"
+    {{ #major_updates }} checked {{ /major_updates }}>
+    <label for="major_updates">Major updates only</label></br>
+    <input type="submit" class="hidden"/>
   </form>
 </script>
 
@@ -111,12 +112,11 @@
           <ul class="nav navbar-nav" id="left-navbar"></ul>
           <ul class="nav navbar-nav navbar-right">
             <li><h4><span class="label label-info label-lg fetchesInProgress"></span></h4></li>
+            <li><h4><span class="label label-danger hidden js-failure-box" role="alert"></span><h4></li>
           </ul>
         </div>
       </div>
     </nav>
-
-  <div class="alert alert-danger hidden js-failure-box" role="alert"></div>
 
   <div id="filters">
   </div>

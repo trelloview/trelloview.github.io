@@ -118,21 +118,19 @@
     this.cards = new CardList
   }
 
-  CardList.prototype.filtered = function(filter_fmd, filter_fd) {
+  CardList.prototype.filtered = function(update_since, major_updates) {
     var result = []
-    if (filter_fmd) {
-      filter_fmd = Date.parse(filter_fmd)
-    }
-    if (filter_fd) {
-      filter_fd = Date.parse(filter_fd)
+    if (update_since) {
+      update_since = Date.parse(update_since)
     }
     $.each(this.cards, function(index, card) {
       var wanted = true
-      if (filter_fmd && card.dateLastMajorActivity < filter_fmd) {
-        wanted = false
-      }
-      if (filter_fd && card.dateLastActivity < filter_fd) {
-        wanted = false
+      if (update_since) {
+        if (major_updates && card.dateLastMajorActivity < update_since) {
+          wanted = false
+        } else if (card.dateLastActivity < update_since) {
+          wanted = false
+        }
       }
       if (wanted) {
         result.push(card)
@@ -591,8 +589,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.boardId = queryParams["b"]
       TRELLOVIEW.view = queryParams["v"] || 'lists'
       TRELLOVIEW.epicId = queryParams["e"]
-      TRELLOVIEW.filter_fmd = queryParams["fmd"]
-      TRELLOVIEW.filter_fd = queryParams["fd"]
+      TRELLOVIEW.update_since = queryParams["update_since"]
+      TRELLOVIEW.major_updates = queryParams["major_updates"] == "1"
 
       TRELLOVIEW.loadTemplates()
       TRELLOVIEW.prepareLayout()
@@ -601,17 +599,41 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.buildLists()
 
       TRELLOVIEW.$content.on("click", ".printable", TRELLOVIEW.printPrintable)
-      TRELLOVIEW.$filters.on("change", "#fmd", TRELLOVIEW.updateDate)
-      TRELLOVIEW.$filters.on("blur", "#fmd", TRELLOVIEW.updateDate)
-      TRELLOVIEW.$filters.on("change", "#fd", TRELLOVIEW.updateDate)
-      TRELLOVIEW.$filters.on("blur", "#fd", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("change", "#update_since", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("blur", "#update_since", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("change", "#major_updates", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("blur", "#major_updates", TRELLOVIEW.updateDate)
+      TRELLOVIEW.$filters.on("submit", "#filter-form", TRELLOVIEW.updateDate)
     },
 
     updateDate: function(e) {
-      TRELLOVIEW.filter_fmd = $("#fmd").val()
-      TRELLOVIEW.filter_fd = $("#fd").val()
+      TRELLOVIEW.update_since = $("#update_since").val()
+      TRELLOVIEW.major_updates = $("#major_updates").prop("checked")
+      TRELLOVIEW.updateLocation()
       TRELLOVIEW.refreshDisplay()
       return false
+    },
+
+    updateLocation: function() {
+      var params = Object.create(null), uri
+
+      params["b"] = TRELLOVIEW.boardId
+      params["v"] = TRELLOVIEW.view
+      if (TRELLOVIEW.epicId) {
+        params["e"] = TRELLOVIEW.epicId
+      }
+      if (TRELLOVIEW.update_since) {
+        params["update_since"] = TRELLOVIEW.update_since
+      }
+      if (TRELLOVIEW.major_updates) {
+        params["major_updates"] = "1"
+      }
+
+      uri = "?" + $.map(params, function(value, key) {
+        return URI.encodeQuery(key) + "=" + URI.encodeQuery(value)
+      }).join("&")
+
+      history.replaceState({}, '', uri)
     },
 
     loadTemplates: function() {
@@ -629,6 +651,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.$content = $("#content")
       TRELLOVIEW.$leftNavbar = $("#left-navbar")
       TRELLOVIEW.$filters = $("#filters")
+      TRELLOVIEW.$filterForm = $("#filter-form")
     },
 
     fetch: function() {
@@ -637,6 +660,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.fetchLists()
       TRELLOVIEW.fetchCards()
       TRELLOVIEW.fetchMembers()
+      window.setTimeout(TRELLOVIEW.fetch, 300000)
     },
 
     startFetch: function(name) {
@@ -662,6 +686,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
     ajaxError: function(error) {
       var message, $failure = $(".js-failure-box");
+      //error = undefined
       if (error === undefined) {
         $failure.text('')
         $failure.addClass('hidden')
@@ -880,12 +905,13 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     },
 
     updateNavBar: function() {
-      TRELLOVIEW.render('left-navbar', TRELLOVIEW.$leftNavbar, {
+      var context = {
         boardID: TRELLOVIEW.boardId,
         listsActive: TRELLOVIEW.view === 'lists',
         epics: TRELLOVIEW.sortedEpics(),
         types: TRELLOVIEW.objectValues(TRELLOVIEW.labelTypes)
-      })
+      }
+      TRELLOVIEW.render('left-navbar', TRELLOVIEW.$leftNavbar, context)
     },
 
     updateFilters: function(show) {
@@ -898,8 +924,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         if (show) {
           TRELLOVIEW.render('filters', TRELLOVIEW.$filters, {
             boardID: TRELLOVIEW.boardId,
-            fmd: TRELLOVIEW.filter_fmd,
-            fd: TRELLOVIEW.filter_fd,
+            update_since: TRELLOVIEW.update_since,
+            major_updates: TRELLOVIEW.major_updates,
           })
           TRELLOVIEW.$filters.show()
           TRELLOVIEW.filtersShown = true
@@ -910,7 +936,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     displayLists: function() {
       var lists = []
       $.each(TRELLOVIEW.lists, function(key, value) {
-        var filteredCards = value.cards.filtered(TRELLOVIEW.filter_fmd, TRELLOVIEW.filter_fd)
+        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates)
         lists.push({
           name: value.name,
           id: value.id,
@@ -961,7 +987,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         creator: 'trelloview'
       });
 
-      $.each(cardlist.filtered(TRELLOVIEW.filter_fmd, TRELLOVIEW.filter_fd), function(index, card) {
+      $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates), function(index, card) {
         if (firstPage) {
           firstPage = false
         } else {
