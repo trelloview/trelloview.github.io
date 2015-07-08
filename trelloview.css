@@ -23,7 +23,26 @@ h2 {
 ol {
   list-style: none;
   padding-left: 20px;
+  padding-bottom: 1em;
 }
 .lists>li {
   margin-top: 20px;
+}
+
+tr>th {
+  padding-right: 1em;
+  text-align: right;
+  vertical-align: top;
+}
+tr>td {
+  text-align: left;
+  vertical-align: top;
+}
+
+del {
+  background: #ffa0a0;
+}
+
+ins {
+  background: #a0ffa0;
 }

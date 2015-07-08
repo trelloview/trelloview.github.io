@@ -16,6 +16,8 @@
 <script src="ext/URI.js"></script>
 <script src="ext/trello_client.js"></script>
 <script src="ext/jspdf.js"></script>
+<script src="ext/jsdiff.js"></script>
+<script src="ext/wiki_edit_diff.js"></script>
 <script src="ext/FileSaver.js"></script>
 <script src="ext/jstorage.js"></script>
 <script src="ext/mustache.min.js"></script>
@@ -32,13 +34,6 @@
 
 <script id="template-filters" type="x-tmpl-mustache">
   <form method="GET" id="filter-form">
-    <input type="hidden" name="b" value="{{ boardID }}">
-    <div>
-      <label for="update_since">Filter: updated since</label>
-      <input type="date" name="update_since" id="update_since" value="{{ update_since }}"><br>
-      <input type="checkbox" name="major_updates" id="major_updates" value="1" {{ #major_updates }} checked {{ /major_updates }}>
-      <label for="major_updates">Only filter on updates which affect printed version of card</label>
-    </div>
     <div>
       <label for="filter_epic">Filter to epic: </label>
       <select name="e" id="filter_epic" class="selectpicker show-tick" data-live-search="true">
@@ -50,6 +45,26 @@
         {{ /epics }}
       </select>
     </div>
+
+    <input type="hidden" name="b" value="{{ boardID }}">
+    <div>
+      <label for="update_since">Filter: updated since</label>
+      <input type="date" name="update_since" id="update_since" value="{{ update_since }}"><br>
+      <input type="checkbox" name="major_updates" id="major_updates" value="1" {{ #major_updates }} checked {{ /major_updates }}>
+      <label for="major_updates">Only include updates which affect printed version of card</label>
+    </div>
+
+    <div>
+      <input type="checkbox" name="show_labels" id="show_labels" {{ #showLabels }} checked {{ /showLabels }}>
+      <label for="show_labels">Show labels</label>
+      <br>
+      <input type="checkbox" name="show_changes" id="show_changes" {{ #showChanges }} checked {{ /showChanges }}>
+      <label for="show_changes">Show changes</label>
+      <br>
+      <input type="checkbox" name="showFullChanges" id="showFullChanges" {{ #showFullChanges }} checked {{ /showFullChanges }}>
+      <label for="showFullChanges">Show full changes</label>
+    </div>
+
     <input type="submit" class="hidden"/>
   </form>
 </script>
@@ -70,20 +85,83 @@
         <hr>
         <h3>{{ name }}</h3>
         <button type="button" class="btn btn-default btn-sm printable" data-listid="{{ id }}">Print</button>
-        <ol>{{ #cards.cards }}
+        <ol>
+        {{ #cards }}
           <li>
             <a href="{{ shortUrl }}">#{{ idShort }}: {{ name }}</a>
-            <ol>
-            {{ #labels }}
-              <li><span class="label-marker label-marker-{{ color }}"></span>{{ type }}: {{ name }}</a></li>
-            {{ /labels }}
-            </ol>
+            {{ #showLabels }}
+              <ol>
+              {{ #labels }}
+                <li><span class="label-marker label-marker-{{ color }}"></span>{{ type }}: {{ name }}</a></li>
+              {{ /labels }}
+              </ol>
+            {{ /showLabels }}
+            {{ #showChanges }}
+              <ol>
+              {{ &renderChanges }}
+              </ol>
+            {{ /showChanges }}
           </li>
-        {{ /cards.cards }}</ol>
+        {{ /cards }}
+        </ol>
       </li>
     {{ /lists }}
   </ol>
 </script>
+
+<script id="template-change-moveList" type="x-tmpl-mustache">
+  <li>
+    Moved from <b>{{ start_list.name }}</b> to <b>{{ end_list.name }}</b>
+  </li>
+</script>
+
+<script id="template-change-createdBy" type="x-tmpl-mustache">
+  <li>
+    Created by {{ created_by.fullName }}
+  </li>
+</script>
+
+<script id="template-change-descriptionChange" type="x-tmpl-mustache">
+  <li>
+    <b>Description changed</b>{{ #showFullChanges }}: <pre>{{ &diff }}</pre>{{ /showFullChanges }}
+  </li>
+</script>
+
+
+<script id="template-change-titleChange" type="x-tmpl-mustache">
+  <li>
+    <b>Title changed</b>{{ #showFullChanges }}: <pre>{{ &diff }}</pre>{{ /showFullChanges }}
+  </li>
+</script>
+
+<script id="template-change-comments" type="x-tmpl-mustache">
+  <li>
+    {{ comments.length }} comments added
+    {{ #showFullChanges }}
+    <table>
+    {{ #comments }}
+      <tr>
+        <th>{{ commenter.fullName }}:</th>
+        <td>{{ text }}</td>
+      </tr>
+    {{ /comments }}</table>
+    {{ /showFullChanges }}
+  </li>
+</script>
+
+<script id="template-change-memberChange" type="x-tmpl-mustache">
+  <li>
+    Member {{ change }}: <b>{{ member.fullName }}</b>
+  </li>
+</script>
+
+
+<script id="template-change-checklist" type="x-tmpl-mustache">
+  <li>
+    Modified checklist <b>{{ list_name }}</b>
+  </li>
+</script>
+
 
 <script id="template-epic" type="x-tmpl-mustache">
   <h2>

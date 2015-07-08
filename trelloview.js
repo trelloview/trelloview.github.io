@@ -25,7 +25,7 @@
   }
 
   var actionIsMajor = {
-    /* Checklit actions */
+    /* Checklist actions */
     "addChecklistToCard": false,
     "removeChecklistFromCard": false,
     "updateCheckItemStateOnCard": false,
@@ -83,12 +83,15 @@
     this.date = Date.parse(actionData.date)
     this.type = actionData.type
     this.member = allMembers[actionData.idMemberCreator]
+    if (!this.member && allMembers.length > 0) {
+      console.log("Unknown memberID in action: " + actionData.idMemberCreator, actionData)
+    }
     this.major = this.checkMajor()
   }
 
   Action.prototype.checkMajor = function() {
     var isMajor = actionIsMajor[this.type]
-    if (isMajor === true || isMajor == false) {
+    if (isMajor === true || isMajor === false) {
       return isMajor
     }
     if (this.type === "updateCard") {
@@ -276,6 +279,154 @@
     })
 
     this.dateLastMajorActivity = this.calcDateLastMajorActivity()
+  }
+
+  Card.prototype.changes = function(update_since) {
+    var results = [],
+        start_list, end_list, created = false, created_by,
+        actionCount = 0,
+        checklistModifications = Object.create(null),
+        comments = [],
+        memberIdsChanged = Object.create(null),
+        originalName,
+        originalDescription
+
+    $.each(this.actions, function(index, action) {
+      if (update_since && action.date < update_since) {
+        return
+      }
+      actionCount += 1
+      if (action.type === "updateCard") {
+        var handled = false
+        if (action.data.listAfter && action.data.listBefore) {
+          if (!end_list) {
+            end_list = action.data.listAfter
+          }
+          start_list = action.data.listBefore
+          handled = true
+        }
+        if (action.data.old.name) {
+          originalName = action.data.old.name
+          handled = true
+        }
+        if (action.data.old.desc) {
+          originalDescription = action.data.old.desc
+          handled = true
+        }
+        if (action.data.old.pos) {
+          handled = true
+        }
+        if (!handled) {
+          console.log("unknown update", action.data)
+        }
+      } else if (action.type === "commentCard") {
+        comments.push({
+          commenter: action.member,
+          text: action.data.text,
+        })
+      } else if (action.type === "createCard") {
+        created = true
+        created_by = action.member
+        if (action.data.list) {
+          if (!end_list) {
+            end_list = action.list
+          }
+        }
+      } else if (action.type === "addMemberToCard") {
+        var memberId = action.data.idMember
+        memberIdsChanged[memberId] = (memberIdsChanged[memberId] || 0) + 1
+      } else if (action.type === "removeMemberFromCard") {
+        var memberId = action.data.idMember
+        memberIdsChanged[memberId] = (memberIdsChanged[memberId] || 0) - 1
+      } else if (action.type === "addChecklistToCard" ||
+          action.type === "removeChecklistFromCard" ||
+          action.type === "updateCheckItemStateOnCard"
+      ) {
+        var checklist = action.data.checklist
+        checklistModifications[checklist.id] = checklist.name
+      } else {
+        console.log("Unknown action:", action.type, action)
+      }
+
+    })
+
+    if (created) {
+      results.push({
+        "type": "createdBy",
+        "created_by": created_by,
+      })
+    } else {
+      if (originalName) {
+        var wikEdDiff = new WikEdDiff();
+        results.push({
+          "type": "titleChange",
+          "oldTitle": originalName,
+          "newTitle": this.name,
+          // "diff":  wikEdDiff.diff(originalName, this.name)
+          "diff": diffString(originalName, this.name),
+        })
+      }
+
+      if (originalDescription) {
+        var wikEdDiff = new WikEdDiff();
+        results.push({
+          "type": "descriptionChange",
+          "oldDescription": originalDescription,
+          "newDescription": this.description,
+          // "diff":  wikEdDiff.diff(originalDescription, this.description)
+          "diff": diffString(originalDescription, this.description),
+        })
+      }
+    }
+
+    if (start_list && end_list && start_list.id !== end_list.id) {
+      results.push({
+        "type": "moveList",
+        "start_list": start_list,
+        "end_list": end_list,
+      })
+    }
+
+    $.each(memberIdsChanged, function(memberId, change) {
+      var member = TRELLOVIEW.members[memberId]
+      if (member === null || change === 0) {
+        return
+      }
+      if (change > 0) {
+        results.push({
+          "type": "memberChange",
+          "change": "added",
+          "member": member
+        })
+      } else {
+        results.push({
+          "type": "memberChange",
+          "change": "removed",
+          "member": member
+        })
+      }
+    })
+
+    if (comments.length != 0) {
+      comments.reverse()
+      results.push({
+        "type": "comments",
+        "comments": comments,
+      })
+    }
+
+    if (!created) {
+      $.each(checklistModifications, function(id, name) {
+        results.push({
+          "type": "checklist",
+          "list_id": id,
+          "list_name": name,
+        })
+      })
+    }
+
+
+    return results
   }
 
   Card.prototype.calcDateLastMajorActivity = function() {
@@ -609,7 +760,10 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.view = queryParams["v"] || 'lists'
       TRELLOVIEW.epicId = queryParams["e"]
       TRELLOVIEW.update_since = queryParams["update_since"]
-      TRELLOVIEW.major_updates = queryParams["major_updates"] == "1"
+      TRELLOVIEW.major_updates = queryParams["major_updates"] === "1"
+      TRELLOVIEW.showLabels = queryParams["showLabels"] === "1"
+      TRELLOVIEW.showChanges = queryParams["showChanges"] === "1"
+      TRELLOVIEW.showFullChanges = queryParams["showFullChanges"] === "1"
 
       TRELLOVIEW.loadTemplates()
       TRELLOVIEW.prepareLayout()
@@ -622,6 +776,12 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.$filters.on("blur", "#update_since", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#major_updates", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("blur", "#major_updates", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "#show_labels", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("blur", "#show_labels", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "#show_changes", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("blur", "#show_changes", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "#showFullChanges", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("blur", "#showFullChanges", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#filter_epic", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("submit", "#filter-form", TRELLOVIEW.filterFormChanged)
     },
@@ -629,6 +789,9 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     filterFormChanged: function(e) {
       TRELLOVIEW.update_since = $("#update_since").val()
       TRELLOVIEW.major_updates = $("#major_updates").prop("checked")
+      TRELLOVIEW.showLabels = $("#show_labels").prop("checked")
+      TRELLOVIEW.showChanges = $("#show_changes").prop("checked")
+      TRELLOVIEW.showFullChanges = $("#showFullChanges").prop("checked")
       TRELLOVIEW.epicId = $("#filter_epic").val()
       TRELLOVIEW.updateLocation()
       TRELLOVIEW.refreshDisplay()
@@ -648,6 +811,15 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       }
       if (TRELLOVIEW.major_updates) {
         params["major_updates"] = "1"
+      }
+      if (TRELLOVIEW.showLabels) {
+        params["showLabels"] = "1"
+      }
+      if (TRELLOVIEW.showChanges) {
+        params["showChanges"] = "1"
+      }
+      if (TRELLOVIEW.showFullChanges) {
+        params["showFullChanges"] = "1"
       }
 
       uri = "?" + $.map(params, function(value, key) {
@@ -765,7 +937,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
     fetchCards: function() {
       TRELLOVIEW.fetchSomething("cards", "trello.cards", function() {
-        return Trello.boards.get(TRELLOVIEW.boardId + "/cards", {"actions": "all", "attachments": "true"})
+        return Trello.boards.get(TRELLOVIEW.boardId + "/cards", {"actions": "all", "attachments": "true", "checkItemStates": "true", "checklists": "all", "members": "true"})
       }, TRELLOVIEW.updateCards)
     },
 
@@ -894,10 +1066,10 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
     refreshDisplay: function() {
       TRELLOVIEW.updateNavBar()
-      if (TRELLOVIEW.view == 'lists') {
+      if (TRELLOVIEW.view === 'lists') {
         TRELLOVIEW.updateFilters(true)
         TRELLOVIEW.displayLists()
-      } else if (TRELLOVIEW.view == 'epic') {
+      } else if (TRELLOVIEW.view === 'epic') {
         TRELLOVIEW.updateFilters(false)
         TRELLOVIEW.displayEpic()
       }
@@ -921,8 +1093,12 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       )
     },
 
-    render: function(templateName, $target, context) {
-      $target.html(Mustache.render(TRELLOVIEW.templates[templateName], context))
+    render: function(templateName, context) {
+      return Mustache.render(TRELLOVIEW.templates[templateName], context)
+    },
+
+    renderToTarget: function(templateName, $target, context) {
+      $target.html(TRELLOVIEW.render(templateName, context))
     },
 
     updateNavBar: function() {
@@ -932,7 +1108,16 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         epics: TRELLOVIEW.sortedEpics(),
         types: TRELLOVIEW.objectValues(TRELLOVIEW.labelTypes)
       }
-      TRELLOVIEW.render('left-navbar', TRELLOVIEW.$leftNavbar, context)
+      TRELLOVIEW.renderToTarget('left-navbar', TRELLOVIEW.$leftNavbar, context)
+    },
+
+    renderChanges: function(changes) {
+      var messages = $.map(changes, function(change, index) {
+        var tmpl = "change-" + change.type
+        change['showFullChanges'] = TRELLOVIEW.showFullChanges
+        return TRELLOVIEW.render(tmpl, change)
+      })
+      return messages.join("")
     },
 
     updateFilters: function(show) {
@@ -952,13 +1137,16 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
           TRELLOVIEW.filtersShown = false
       } else if (show && (!TRELLOVIEW.filtersShown || epics != TRELLOVIEW.shownEpics)) {
         TRELLOVIEW.shownEpics = epics
-        TRELLOVIEW.render('filters', TRELLOVIEW.$filters, {
+        TRELLOVIEW.renderToTarget('filters', TRELLOVIEW.$filters, {
           boardID: TRELLOVIEW.boardId,
           update_since: TRELLOVIEW.update_since,
           major_updates: TRELLOVIEW.major_updates,
           epics: epics,
           show_all_epics: !TRELLOVIEW.epicId,
-          show_no_epics: TRELLOVIEW.epicId == "NONE",
+          show_no_epics: TRELLOVIEW.epicId === "NONE",
+          showLabels: TRELLOVIEW.showLabels,
+          showChanges: TRELLOVIEW.showChanges,
+          showFullChanges: TRELLOVIEW.showFullChanges,
         })
         $('.selectpicker').selectpicker()
         TRELLOVIEW.$filters.show()
@@ -969,16 +1157,29 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     displayLists: function() {
       var lists = []
       $.each(TRELLOVIEW.lists, function(key, value) {
-        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId)
+        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId),
+            update_since
+
+        if (TRELLOVIEW.update_since) {
+          update_since = Date.parse(TRELLOVIEW.update_since)
+        }
         if (filteredCards.length > 0) {
           lists.push({
             name: value.name,
             id: value.id,
-            cards: { cards: filteredCards }
+            cards: filteredCards,
+            renderChanges: function() {
+              var result = []
+              result.push(TRELLOVIEW.renderChanges(this.changes(update_since)))
+              return result.join("")
+            },
+            showLabels: TRELLOVIEW.showLabels,
+            showChanges: TRELLOVIEW.showChanges,
+            showFullChanges: TRELLOVIEW.showFullChanges,
           })
         }
       })
-      TRELLOVIEW.render('lists', TRELLOVIEW.$content, {
+      TRELLOVIEW.renderToTarget('lists', TRELLOVIEW.$content, {
         lists: lists
       })
     },
@@ -987,7 +1188,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       var epic = TRELLOVIEW.labels[TRELLOVIEW.epicId]
       if (!epic) return
 
-      TRELLOVIEW.render('epic', TRELLOVIEW.$content, {
+      TRELLOVIEW.renderToTarget('epic', TRELLOVIEW.$content, {
         epic: epic,
         lists: epic.lists()
       })
