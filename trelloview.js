@@ -289,7 +289,8 @@
         comments = [],
         memberIdsChanged = Object.create(null),
         originalName,
-        originalDescription
+        originalDescription,
+        movedPosition = false
 
     $.each(this.actions, function(index, action) {
       if (update_since && action.date < update_since) {
@@ -309,8 +310,9 @@
           originalName = action.data.old.name
           handled = true
         }
-        if (action.data.old.desc) {
+        if (action.data.old.desc != null) {
           originalDescription = action.data.old.desc
+          movedPosition = true
           handled = true
         }
         if (action.data.old.pos) {
@@ -377,14 +379,18 @@
           "diff": diffString(originalDescription, this.description),
         })
       }
-    }
 
-    if (start_list && end_list && start_list.id !== end_list.id) {
-      results.push({
-        "type": "moveList",
-        "start_list": start_list,
-        "end_list": end_list,
-      })
+      if (start_list && end_list && start_list.id !== end_list.id) {
+        results.push({
+          "type": "moveList",
+          "start_list": start_list,
+          "end_list": end_list,
+        })
+      } else if (movedPosition) {
+        results.push({
+          "type": "movePosition",
+        })
+      }
     }
 
     $.each(memberIdsChanged, function(memberId, change) {

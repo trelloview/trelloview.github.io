@@ -115,6 +115,14 @@
   </li>
 </script>
 
+<script id="template-change-movePosition" type="x-tmpl-mustache">
+  {{ #showFullChanges }}
+  <li>
+    Moved position in list
+  </li>
+  {{ /showFullChanges }}
+</script>
+
 <script id="template-change-createdBy" type="x-tmpl-mustache">
   <li>
     Created by {{ created_by.fullName }}
