@@ -853,6 +853,20 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.$filterForm = $("#filter-form")
     },
 
+    indexPage: function() {
+      var $previouslyViewed = $("#previouslyViewed"),
+          boards = $.jStorage.get("boards"),
+          context = {
+            boards: $.map(boards, function(data, id) {
+              data['id'] = id
+              return data
+            })
+          }
+      if (context.boards.length > 0) {
+        TRELLOVIEW.renderToTarget('previouslyViewed', $previouslyViewed, context)
+      }
+    },
+
     fetch: function() {
       TRELLOVIEW.fetchMainData()
       TRELLOVIEW.fetchLabels()
@@ -958,9 +972,15 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
 
     updateMainData: function(responseObj) {
-      var $title = $(".board-title")
+      var $title = $(".board-title"),
+          boards
       $title.text(responseObj.name)
       $title.attr("href", responseObj.shortUrl)
+
+      boards = $.jStorage.get("boards") || Object.create(null)
+      boards[TRELLOVIEW.boardId] = responseObj
+      $.jStorage.set("boards", boards)
+      TRELLOVIEW.boards = boards
     },
 
     updateLists: function(responseObj) {

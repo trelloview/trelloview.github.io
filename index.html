@@ -6,11 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
 <link href="bootstrap/css/bootstrap-theme.min.css" rel="stylesheet">
+<link href="bootstrap-select/css/bootstrap-select.min.css" rel="stylesheet">
 <link href="trelloview.css" rel="stylesheet">
 
 <title>Show trello cards</title>
 <script src="ext/jquery-2.1.4.min.js"></script>
 <script src="bootstrap/js/bootstrap.min.js"></script>
+<script src="bootstrap-select/js/bootstrap-select.min.js"></script>
 <script src="ext/URI.js"></script>
 <script src="ext/trello_client.js"></script>
 <script src="ext/jspdf.js"></script>
@@ -19,8 +21,23 @@
 <script src="ext/mustache.min.js"></script>
 <script src="trelloview.js"></script>
 
+<script id="template-previouslyViewed" type="x-tmpl-mustache">
+  <h2>Previously viewed boards</h2>
+  <ol>
+  {{ #boards }}
+    <li><a href="show.html?b={{ id }}">{{ name }}</a></li>
+  {{ /boards }}
+  </ol>
+  <hr>
+</script>
+
 </head>
 <body>
+  <div id="previouslyViewed"></div>
+  <p>
+  Pick a trello board to view; the Board ID is the part after "/b/" in the URL
+  for the board.
+  </p>
   <form action="show.html" method="GET">
     <label for="board_id">Board ID:</label>
     <input type="text" name="b">
@@ -29,6 +46,7 @@
 
   <script>
     TRELLOVIEW.init(URI.parseQuery(window.location.search))
+    TRELLOVIEW.indexPage()
   </script>
 </body>
 </html>
