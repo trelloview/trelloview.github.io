@@ -40,6 +40,7 @@
     /* Major actions */
     "moveCardToBoard": true,
     "createCard": true,
+    "copyCard": true,
 
     /* Changing membership of the card */
     "addMemberToCard": true,
@@ -290,7 +291,10 @@
         memberIdsChanged = Object.create(null),
         originalName,
         originalDescription,
-        movedPosition = false
+        movedPosition = false,
+        changedDueDate = false,
+        cardSource,
+        boardSource
 
     $.each(this.actions, function(index, action) {
       if (update_since && action.date < update_since) {
@@ -318,6 +322,10 @@
         if (action.data.old.pos) {
           handled = true
         }
+        if (action.data.old.due) {
+          changedDueDate = true
+          handled = true
+        }
         if (!handled) {
           console.log("unknown update", action.data)
         }
@@ -329,6 +337,24 @@
       } else if (action.type === "createCard") {
         created = true
         created_by = action.member
+        if (action.data.list) {
+          if (!end_list) {
+            end_list = action.list
+          }
+        }
+      } else if (action.type === "copyCard") {
+        created = true
+        created_by = action.member
+        cardSource = action.data.cardSource.name
+        if (action.data.list) {
+          if (!end_list) {
+            end_list = action.list
+          }
+        }
+      } else if (action.type === "moveCardToBoard") {
+        created = true
+        created_by = action.member
+        boardSource = action.data.boardSource.name
         if (action.data.list) {
           if (!end_list) {
             end_list = action.list
@@ -356,6 +382,10 @@
       results.push({
         "type": "createdBy",
         "created_by": created_by,
+        "cardSource": cardSource,
+        "boardSource": boardSource,
+        "cardSource?": cardSource !== undefined,
+        "boardSource?": boardSource !== undefined,
       })
     } else {
       if (originalName) {
@@ -389,6 +419,12 @@
       } else if (movedPosition) {
         results.push({
           "type": "movePosition",
+        })
+      }
+      
+      if (changedDueDate) {
+        results.push({
+          "type": "changedDueDate",
         })
       }
     }

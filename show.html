@@ -123,9 +123,23 @@
   {{ /showFullChanges }}
 </script>
 
+<script id="template-change-changedDueDate" type="x-tmpl-mustache">
+  {{ #showFullChanges }}
+  <li>
+    Changed due date
+  </li>
+  {{ /showFullChanges }}
+</script>
+
 <script id="template-change-createdBy" type="x-tmpl-mustache">
   <li>
     Created by {{ created_by.fullName }}
+    {{ #cardSource? }}
+      (copied from <q>{{ cardSource }}</q>)
+    {{ /cardSource? }}
+    {{ #boardSource? }}
+      (moved from board <q>{{ boardSource }}</q>)
+    {{ /boardSource? }}
   </li>
 </script>
 
