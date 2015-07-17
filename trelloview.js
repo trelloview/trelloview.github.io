@@ -69,6 +69,115 @@
     ]
   })
 
+// ==========================================================================
+
+  // A PDF document
+  // Wrapper around jsPDF abstracing common things we need to set
+  function PdfDocument(width, height) {
+    // Constant metrics - these need to be set first
+    this.mmToPt = 2.83464567
+    this.descenderProportion = 0.25
+
+    this.width = width
+    this.height = height
+
+    this.atStart = true
+    this.doc = this._makePdfDoc(width, height)
+  }
+
+  // Set the PDF document metadata
+  PdfDocument.prototype.setMetadata = function(props) {
+    this.doc.setProperties({
+      title: props.title || '',
+      subject: props.subject || '',
+      author: props.author || 'trelloview',
+      keywords: props.keywords || 'trello',
+      creator: props.creator || 'trelloview',
+    })
+  }
+
+  // Add a new page to the document
+  PdfDocument.prototype.newPage = function() {
+    if (this.atStart) {
+      this.atStart = false
+    } else {
+      this.doc.addPage()
+    }
+  }
+
+  // Save the document (triggers a browse save, with the given filename)
+  PdfDocument.prototype.save = function(filename) {
+    this.doc.save(filename)
+  }
+
+
+  // Make and return a PDF document, with given height and width
+  PdfDocument.prototype._makePdfDoc = function(width, height) {
+    var orientation, shortSide, longSide, doc
+
+    if (width > height) {
+      orientation = "landscape"
+      shortSide = height
+      longSide = width
+    } else {
+      orientation = "portrait"
+      shortSide = width
+      longSide = height
+    }
+
+    var doc = new jsPDF(orientation, "pt", [longSide * this.mmToPt, shortSide * this.mmToPt])
+    this._fixKerning(doc)
+    return doc
+  }
+
+  PdfDocument.prototype._fixKerning = function(doc) {
+    delete doc.internal.getFont().metadata.Unicode.kerning[97][84]
+    delete doc.internal.getFont().metadata.Unicode.kerning[101][84]
+    delete doc.internal.getFont().metadata.Unicode.kerning[114][84]
+    delete doc.internal.getFont().metadata.Unicode.kerning[117][84]
+  }
+
+  // ==========================================================================
+
+  function PdfRenderer() {
+  }
+
+  PdfRenderer.prototype.save = function(filename) {
+    this.pdf.save(filename)
+  }
+
+  // ==========================================================================
+
+  // Render cards to "index card" format - 6x4 inches
+  function PdfRendererIndexCard() {
+    PdfRenderer.call(this)
+    this.pdf = new PdfDocument(152.4, 101.6)
+    this.dimensions = {
+    }
+  }
+  PdfRendererIndexCard.prototype = Object.create(PdfRenderer.prototype)
+
+  PdfRendererIndexCard.prototype.renderCard = function(card) {
+    this.pdf.newPage()
+    card.toPdf(this.pdf.doc)
+  }
+
+  // ==========================================================================
+
+  // Render cards to A4 pages
+  function PdfRendererA4() {
+    PdfRenderer.call(this)
+    this.pdf = new PdfDocument(210, 297)
+  }
+  PdfRendererA4.prototype = Object.create(PdfRenderer.prototype)
+
+  PdfRendererA4.prototype.renderCard = function(card) {
+    this.pdf.newPage()
+    card.toPdf(this.pdf.doc)
+  }
+
+// ==========================================================================
+
   function Member(memberData) {
     this.id = memberData.id
     this.fullName = memberData.fullName
@@ -806,6 +915,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.showLabels = queryParams["showLabels"] === "1"
       TRELLOVIEW.showChanges = queryParams["showChanges"] === "1"
       TRELLOVIEW.showFullChanges = queryParams["showFullChanges"] === "1"
+      TRELLOVIEW.printSize = queryParams["printSize"] || 'index-card'
 
       TRELLOVIEW.loadTemplates()
       TRELLOVIEW.prepareLayout()
@@ -824,6 +934,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.$filters.on("blur", "#show_changes", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#showFullChanges", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("blur", "#showFullChanges", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "[name=printSize]", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("blur", "[name=printSize]", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#filter_epic", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("submit", "#filter-form", TRELLOVIEW.filterFormChanged)
     },
@@ -834,6 +946,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.showLabels = $("#show_labels").prop("checked")
       TRELLOVIEW.showChanges = $("#show_changes").prop("checked")
       TRELLOVIEW.showFullChanges = $("#showFullChanges").prop("checked")
+      TRELLOVIEW.printSize = $("[name=printSize]:checked").val() || 'index-card'
       TRELLOVIEW.epicId = $("#filter_epic").val()
       TRELLOVIEW.updateLocation()
       TRELLOVIEW.refreshDisplay()
@@ -862,6 +975,9 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       }
       if (TRELLOVIEW.showFullChanges) {
         params["showFullChanges"] = "1"
+      }
+      if (TRELLOVIEW.printSize) {
+        params["printSize"] = TRELLOVIEW.printSize
       }
 
       uri = "?" + $.map(params, function(value, key) {
@@ -1209,6 +1325,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
           showLabels: TRELLOVIEW.showLabels,
           showChanges: TRELLOVIEW.showChanges,
           showFullChanges: TRELLOVIEW.showFullChanges,
+          printSizeIndexCard: TRELLOVIEW.printSize === 'index-card',
+          printSizeA4: TRELLOVIEW.printSize === 'A4',
         })
         $('.selectpicker').selectpicker()
         TRELLOVIEW.$filters.show()
@@ -1278,32 +1396,22 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     },
 
     printCards: function(cardlist, name) {
-      var doc = new jsPDF("landscape", "pt", [102 * 2.83464567, 152 * 2.83464567]),
-          firstPage = true;
+      var renderer
 
-      delete doc.internal.getFont().metadata.Unicode.kerning[97][84]
-      delete doc.internal.getFont().metadata.Unicode.kerning[101][84]
-      delete doc.internal.getFont().metadata.Unicode.kerning[114][84]
-      delete doc.internal.getFont().metadata.Unicode.kerning[117][84]
-      doc.setProperties({
-        title: 'Title',
-        subject: 'Subject',
-        author: 'trelloview',
-        keywords: 'trello',
-        creator: 'trelloview'
-      });
+      if (TRELLOVIEW.printSize === 'A4') {
+        renderer = new PdfRendererA4()
+      } else if (TRELLOVIEW.printSize ==='index-card') {
+        renderer = new PdfRendererIndexCard()
+      } else {
+        throw "Unknown page size (" + TRELLOVIEW.printSize + ")"
+      }
 
       $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId), function(index, card) {
-        if (firstPage) {
-          firstPage = false
-        } else {
-          doc.addPage()
-        }
-        card.toPdf(doc)
+        renderer.renderCard(card)
       })
 
       // Save the PDF
-      doc.save('cards_' + name + '.pdf');
+      renderer.save('cards_' + name + '.pdf');
     },
 
     generatePdf: function() {

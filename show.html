@@ -20,6 +20,7 @@
 <script src="ext/wiki_edit_diff.js"></script>
 <script src="ext/FileSaver.js"></script>
 <script src="ext/jstorage.js"></script>
+<script src="ext/markdown.min.js"></script>
 <script src="ext/mustache.min.js"></script>
 <script src="trelloview.js"></script>
 
@@ -63,6 +64,13 @@
       <br>
       <input type="checkbox" name="showFullChanges" id="showFullChanges" {{ #showFullChanges }} checked {{ /showFullChanges }}>
       <label for="showFullChanges">Show full changes</label>
+    </div>
+    <div>
+      <input type="radio" name="printSize" value="index-card" id="printSizeIndexCard" {{ #printSizeIndexCard }} checked {{ /printSizeIndexCard }}>
+      <label for="printSizeIndexCard">Print to index cards</label>
+      <br>
+      <input type="radio" name="printSize" value="A4" id="printSizeA4" {{ #printSizeA4 }} checked {{ /printSizeA4 }}>
+      <label for="printSizeA4">Print to A4</label>
     </div>
 
     <input type="submit" class="hidden"/>
