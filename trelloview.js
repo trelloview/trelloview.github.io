@@ -1127,11 +1127,16 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     },
 
     refreshDisplay: function() {
-      TRELLOVIEW.updateNavBar()
       if (TRELLOVIEW.view === 'lists') {
+        TRELLOVIEW.updateNavBar()
         TRELLOVIEW.updateFilters(true)
-        TRELLOVIEW.displayLists()
+        TRELLOVIEW.displayLists(false)
+      } else if (TRELLOVIEW.view === 'brief') {
+        $(".navbar").hide()
+        TRELLOVIEW.updateFilters(false)
+        TRELLOVIEW.displayLists(true)
       } else if (TRELLOVIEW.view === 'epic') {
+        TRELLOVIEW.updateNavBar()
         TRELLOVIEW.updateFilters(false)
         TRELLOVIEW.displayEpic()
       }
@@ -1216,7 +1221,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       }
     },
 
-    displayLists: function() {
+    displayLists: function(brief) {
       var lists = []
       $.each(TRELLOVIEW.lists, function(key, value) {
         var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId),
@@ -1242,7 +1247,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         }
       })
       TRELLOVIEW.renderToTarget('lists', TRELLOVIEW.$content, {
-        lists: lists
+        lists: lists,
+        brief: brief
       })
     },
 
