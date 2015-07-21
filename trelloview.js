@@ -71,18 +71,110 @@
 
 // ==========================================================================
 
-  // A PDF document
-  // Wrapper around jsPDF abstracing common things we need to set
-  function PdfDocument(width, height) {
-    // Constant metrics - these need to be set first
-    this.mmToPt = 2.83464567
-    this.descenderProportion = 0.25
+  // Constant metrics - these need to be set first
+  var mmToPt = 2.83464567,
+      descenderProportion = 0.25
 
+  function PdfDrawingRegion(doc, left, top, width, height, outer) {
+    this.doc = doc
+    this.clipped = false
+
+    if (outer) {
+      // Convert the coordinates from relative to the outer context, to
+      // absolute on the page
+      left += outer.left
+      top += outer.top
+      if (width > outer.width - left) {
+        width = outer.width - left
+      }
+      if (width < 0) {
+        width = 0
+      }
+      if (width > outer.width - left) {
+        width = outer.width - left
+      }
+      if (width < 0) {
+        width = 0
+      }
+    }
+
+    // The coordinates of the region, absolute on the page, in mm
+    this.absLeft = left
+    this.absTop = top
     this.width = width
     this.height = height
+  }
+
+  PdfDrawingRegion.prototype.clip = function() {
+    if (!this.clipped) {
+      this.doc.saveContext()
+      this.doc.rect(this.absLeft * mmToPt, this.absTop * mmToPt, this.width * mmToPt, this.height * mmToPt, null).clipInvisible()
+      this.clipped = true
+    }
+  }
+
+  PdfDrawingRegion.prototype.unclip = function() {
+    if (this.clipped) {
+      this.doc.restoreContext()
+      this.clipped = false
+    }
+  }
+
+  PdfDrawingRegion.prototype.rect = function(left, top, width, height) {
+    this.doc.rect(this.absLeft * mmToPt, this.absTop * mmToPt, this.width * mmToPt, this.height * mmToPt)
+  }
+
+
+  PdfDrawingRegion.prototype.toAbsolute = function(x, y) {
+    return [x + this.left, y + this.top]
+  }
+
+// ==========================================================================
+
+  // A PDF document
+  // Wrapper around jsPDF abstracing common things we need to set
+  function PdfDocument(width, height, margin) {
+    // Font sizes (in mm)
+    this.fontSizes = {}
+
+    // Dimensions of the paper (in mm)
+    this.totalWidth = width
+    this.totalHeight = height
+    this.margin = margin
+
+    // A stack of drawing regions
+    this.regionStack = []
+    // The current drawing region
+    this.region = null
 
     this.atStart = true
     this.doc = this._makePdfDoc(width, height)
+  }
+
+  PdfDocument.prototype.enterDrawingRegion = function(left, top, width, height, clip) {
+    // console.log("enterDrawingRegion " + this.regionStack, left, top, width, height, clip)
+    var region = new PdfDrawingRegion(this.doc, left, top, width, height, this.region)
+    this.regionStack.push(region)
+    if (clip) {
+      region.clip()
+    }
+    this.region = region
+  }
+
+  PdfDocument.prototype.leaveDrawingRegion = function() {
+    // console.log("leaveDrawingRegion " + this.regionStack)
+    var oldRegion = this.regionStack.pop()
+    if (oldRegion) {
+      oldRegion.unclip()
+    }
+    this.region = this.regionStack[this.regionStack.length - 1]
+  }
+
+  PdfDocument.prototype.setFontSizesInPt = function(sizes) {
+    var doc = this
+    $.each(sizes, function(font, size) {
+      doc.fontSizes[font] = size * mmToPt
+    })
   }
 
   // Set the PDF document metadata
@@ -98,18 +190,27 @@
 
   // Add a new page to the document
   PdfDocument.prototype.newPage = function() {
+    while (this.regionStack.length > 0) {
+      this.leaveDrawingRegion()
+    }
+
     if (this.atStart) {
       this.atStart = false
     } else {
       this.doc.addPage()
     }
+
+    this.enterDrawingRegion(this.margin, this.margin, this.totalWidth - this.margin * 2, this.totalHeight - this.margin * 2, true)
   }
 
-  // Save the document (triggers a browse save, with the given filename)
+  // Save the document (triggers a browser save, with the given filename)
   PdfDocument.prototype.save = function(filename) {
     this.doc.save(filename)
   }
 
+  // ================
+  // Internal methods
+  // ================
 
   // Make and return a PDF document, with given height and width
   PdfDocument.prototype._makePdfDoc = function(width, height) {
@@ -125,7 +226,7 @@
       longSide = height
     }
 
-    var doc = new jsPDF(orientation, "pt", [longSide * this.mmToPt, shortSide * this.mmToPt])
+    var doc = new jsPDF(orientation, "pt", [longSide * mmToPt, shortSide * mmToPt])
     this._fixKerning(doc)
     return doc
   }
@@ -151,15 +252,50 @@
   // Render cards to "index card" format - 6x4 inches
   function PdfRendererIndexCard() {
     PdfRenderer.call(this)
-    this.pdf = new PdfDocument(152.4, 101.6)
+    this.pdf = new PdfDocument(152.4, 101.6, 5)
+    console.log(this.pdf)
+    this.pdf.setFontSizesInPt({
+      title: 25,
+      label: 12,
+      members: 8,
+      id: 20,
+      metadata: 8,
+    })
     this.dimensions = {
+      // Layout sizes
+      cardBorderWidth: 2,
+      internalLineWidth: 0.5,
+      textMargin: 2,
+
+      /*
+      rhsWidth: 50 - text_margin * 2,
+      rhsLeft: this.pdf.width - cardBorderWidth - rhsWidth - textMargin - internalLineWidth,
+      lhsWidth: this.pdf.width - cardBorderWidth * 2 - rhsWidth - internalLineWidth * 3 - textMargin * 4,
+      lhsLeft: cardBorderWidth + textMargin + internalLineWidth,
+      contentsBottom: this.pdf.height - cardBorderWidth - textMargin - internalLineWidth,
+      contentsTop: cardBorderWidth + textMargin + internalLineWidth,
+      */
     }
   }
   PdfRendererIndexCard.prototype = Object.create(PdfRenderer.prototype)
 
   PdfRendererIndexCard.prototype.renderCard = function(card) {
     this.pdf.newPage()
+    this._renderBorder(card)
+    this.pdf.newPage()
     card.toPdf(this.pdf.doc)
+  }
+
+  PdfRendererIndexCard.prototype._renderBorder = function(card) {
+    var color = colorTupleForLabel(card.epic)
+    this.pdf.doc.setLineWidth(this.dimensions.cardBorderWidth * mmToPt)
+    this.pdf.doc.setDrawColor(color[0], color[1], color[2])
+    this.pdf.region.rect(
+      this.dimensions.cardBorderWidth / 2,
+      this.dimensions.cardBorderWidth / 2,
+      this.pdf.region.width - this.dimensions.cardBorderWidth,
+      this.pdf.region.height - this.dimensions.cardBorderWidth
+    )
   }
 
   // ==========================================================================
@@ -789,7 +925,6 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         card_border_width = 2 * mm_to_pt,
         internal_line_width = 0.5 * mm_to_pt,
         text_margin = 2 * mm_to_pt,
-        title_margin = 10 * mm_to_pt,
         rhs_width = 50 * mm_to_pt - text_margin * 2,
         rhs_left = width - paper_margin - card_border_width - rhs_width - text_margin - internal_line_width,
         lhs_width = width - paper_margin * 2 - card_border_width * 2 - rhs_width - internal_line_width * 3 - text_margin * 4,
