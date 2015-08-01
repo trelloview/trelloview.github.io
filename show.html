@@ -73,7 +73,7 @@
   {{ ^brief }}
   <hr>
   {{ /brief }}
-  <ol class="lists">
+  <ol class="{{ #brief }}brief {{ /brief }}lists">
     {{ ^lists }}
       <li>No cards matching filters</li>
     {{ /lists }}
