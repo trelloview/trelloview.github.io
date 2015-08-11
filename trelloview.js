@@ -1196,6 +1196,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
             id: epic.id,
             color: epic.color,
             selected: epic.id === TRELLOVIEW.epicId,
+            cardCount: epic.cards.cards.length,
           })
         })
       }

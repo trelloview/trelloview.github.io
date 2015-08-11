@@ -41,7 +41,7 @@
         <option value="NONE" {{ #show_no_epics }}selected=selected{{ /show_no_epics }}>Not tagged to any epics</option>
         <option data-divider="true"></option>
         {{ #epics }}
-          <option value="{{ id }}" {{ #selected }}selected=selected{{ /selected }} data-content="<span class='label-marker label-marker-{{ color }}'></span>{{ name }}"></option>
+          <option value="{{ id }}" {{ #selected }}selected=selected{{ /selected }} data-content="<span class='label-marker label-marker-{{ color }}'></span>{{ name }} <small>({{ cardCount }})</small>"></option>
         {{ /epics }}
       </select>
     </div>
