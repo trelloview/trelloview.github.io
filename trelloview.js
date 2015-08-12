@@ -1274,6 +1274,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         $.each(TRELLOVIEW.labelTypes.Feature.labels, function(index, feature) {
           if (feature.cards.cards.length) {
             features.push({
+              id: feature.id,
               name: feature.name,
               color: feature.color,
               cardCount: feature.cards.cards.length,
@@ -1286,6 +1287,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
       TRELLOVIEW.renderToTarget('status', TRELLOVIEW.$content, {
         features: features,
+        boardId: TRELLOVIEW.boardId,
       })
     },
 
