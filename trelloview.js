@@ -1139,6 +1139,10 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         TRELLOVIEW.updateNavBar()
         TRELLOVIEW.updateFilters(false)
         TRELLOVIEW.displayEpic()
+      } else if (TRELLOVIEW.view === 'status') {
+        TRELLOVIEW.updateNavBar()
+        TRELLOVIEW.updateFilters(false)
+        TRELLOVIEW.displayStatus()
       }
     },
 
@@ -1255,6 +1259,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
     displayEpic: function() {
       var epic = TRELLOVIEW.labels[TRELLOVIEW.epicId]
+      console.log(epic)
       if (!epic) return
 
       TRELLOVIEW.renderToTarget('epic', TRELLOVIEW.$content, {
@@ -1263,6 +1268,26 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       })
     },
 
+    displayStatus: function() {
+      var epics = []
+      if (TRELLOVIEW.labelTypes && TRELLOVIEW.labelTypes.Epic) {
+        $.each(TRELLOVIEW.labelTypes.Epic.labels, function(index, epic) {
+          if (epic.cards.cards.length) {
+            epics.push({
+              name: epic.name,
+              color: epic.color,
+              cardCount: epic.cards.cards.length,
+              lists: epic.lists(),
+            })
+          }
+        })
+      }
+
+
+      TRELLOVIEW.renderToTarget('status', TRELLOVIEW.$content, {
+        epics: epics,
+      })
+    },
 
     printPrintable: function(target) {
       var $target = $(target.target),

@@ -192,7 +192,6 @@
   </li>
 </script>
 
-
 <script id="template-epic" type="x-tmpl-mustache">
   <h2>
     <span class="label-marker label-marker-{{ epic.color }}"></span>{{ epic.name }}</h2>
@@ -217,6 +216,27 @@
       </li>
     {{ /lists }}
   </ol>
+</script>
+
+<script id="template-status" type="x-tmpl-mustache">
+  {{ #epics }}
+  <div class="container">
+
+    <span class="label-marker label-marker-{{ color }}"></span>{{ name }} ({{ cardCount }} cards)
+    <table class="table table-condensed">
+    {{ #lists }}
+      <tr>
+      <td>
+      {{ name }}
+      </td>
+      <td width="5em">
+      {{ cards.cards.length }}
+      </td>
+      </tr>
+    {{ /lists }}
+    </table>
+  </div>
+  {{ /epics }}
 </script>
 
 </head>
