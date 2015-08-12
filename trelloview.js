@@ -21,7 +21,7 @@
     "Type": 1,
     "Need": 2,
     "Skill": 3,
-    "Epic": 4
+    "Feature": 4,
   }
 
   var actionIsMajor = {
@@ -122,8 +122,8 @@
     this.cards = new CardList
   }
 
-  CardList.prototype.filtered = function(update_since, major_updates, epicId) {
-    var result = [], cardEpics
+  CardList.prototype.filtered = function(update_since, major_updates, featureId) {
+    var result = [], cardFeatures
 
     if (update_since) {
       update_since = Date.parse(update_since)
@@ -137,16 +137,16 @@
           wanted = false
         }
       }
-      if (wanted && epicId) {
-        cardEpics = card.labelsByType.Epic || []
-        if (epicId === "NONE") {
-          if (cardEpics.length > 0) {
+      if (wanted && featureId) {
+        cardFeatures = card.labelsByType.Feature || []
+        if (featureId === "NONE") {
+          if (cardFeatures.length > 0) {
             wanted = false
           }
         } else {
           var foundMatch = false
-          $.each(cardEpics, function(index, cardEpic) {
-            if (cardEpic.id === epicId) {
+          $.each(cardFeatures, function(index, cardFeature) {
+            if (cardFeature.id === featureId) {
               foundMatch = true
             }
           })
@@ -273,7 +273,7 @@
     this.labels = this.calcLabels(cardData, sortedLabels)
     this.members = this.calcMembers(cardData, allMembers)
     this.labelsByType = this.calcLabelsByType()
-    this.epic = this.labelsByType.Epic ? this.labelsByType.Epic[0] : null
+    this.feature = this.labelsByType.Feature ? this.labelsByType.Feature[0] : null 
     this.type = this.labelsByType.Type ? this.labelsByType.Type[0] : null
     this.actions = $.map(cardData.actions, function(actionData) {
       return new Action(actionData, allMembers)
@@ -692,9 +692,9 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         color,
         descenderProportion = 0.25
 
-    // Border of card, in colour based on Epic
+    // Border of card, in colour based on Feature
     doc.setLineWidth(card_border_width)
-    setDrawColorForLabel(doc, this.epic)
+    setDrawColorForLabel(doc, this.feature)
     doc.rect(
       card_border_width / 2 + paper_margin,
       card_border_width / 2 + paper_margin,
@@ -764,7 +764,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
     rhs_curr_y_pos += this.displayLabels(doc, 'Skill', 'Skill:', rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
 
-    rhs_curr_y_pos += this.displayLabels(doc, 'Epic', null, rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
+    rhs_curr_y_pos += this.displayLabels(doc, 'Feature', null, rhs_curr_y_pos, rhs_left, rhs_width, text_margin, internal_line_width)
 
     doc.setFontSize(members_size)
     this.displayMembers(doc, contents_top, contents_bottom, rhs_left, rhs_width, text_margin)
@@ -800,7 +800,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       Trello.setKey(key)
       TRELLOVIEW.boardId = queryParams["b"]
       TRELLOVIEW.view = queryParams["v"] || 'lists'
-      TRELLOVIEW.epicId = queryParams["e"]
+      TRELLOVIEW.featureId = queryParams["e"]
       TRELLOVIEW.update_since = queryParams["update_since"]
       TRELLOVIEW.major_updates = queryParams["major_updates"] === "1"
       TRELLOVIEW.showLabels = queryParams["showLabels"] === "1"
@@ -824,7 +824,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.$filters.on("blur", "#show_changes", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#showFullChanges", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("blur", "#showFullChanges", TRELLOVIEW.filterFormChanged)
-      TRELLOVIEW.$filters.on("change", "#filter_epic", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "#filter_feature", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("submit", "#filter-form", TRELLOVIEW.filterFormChanged)
     },
 
@@ -834,7 +834,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.showLabels = $("#show_labels").prop("checked")
       TRELLOVIEW.showChanges = $("#show_changes").prop("checked")
       TRELLOVIEW.showFullChanges = $("#showFullChanges").prop("checked")
-      TRELLOVIEW.epicId = $("#filter_epic").val()
+      TRELLOVIEW.featureId = $("#filter_feature").val()
       TRELLOVIEW.updateLocation()
       TRELLOVIEW.refreshDisplay()
       return false
@@ -845,8 +845,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
       params["b"] = TRELLOVIEW.boardId
       params["v"] = TRELLOVIEW.view
-      if (TRELLOVIEW.epicId) {
-        params["e"] = TRELLOVIEW.epicId
+      if (TRELLOVIEW.featureId) {
+        params["e"] = TRELLOVIEW.featureId
       }
       if (TRELLOVIEW.update_since) {
         params["update_since"] = TRELLOVIEW.update_since
@@ -1138,7 +1138,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       } else if (TRELLOVIEW.view === 'epic') {
         TRELLOVIEW.updateNavBar()
         TRELLOVIEW.updateFilters(false)
-        TRELLOVIEW.displayEpic()
+        TRELLOVIEW.displayFeature()
       } else if (TRELLOVIEW.view === 'status') {
         TRELLOVIEW.updateNavBar()
         TRELLOVIEW.updateFilters(false)
@@ -1146,8 +1146,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       }
     },
 
-    sortedEpics: function() {
-      var labelType = TRELLOVIEW.labelTypes["Epic"],
+    sortedFeatures: function() {
+      var labelType = TRELLOVIEW.labelTypes["Feature"],
           labels;
       if (labelType) {
         return labelType.sortedLabels()
@@ -1176,7 +1176,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       var context = {
         boardID: TRELLOVIEW.boardId,
         listsActive: TRELLOVIEW.view === 'lists',
-        epics: TRELLOVIEW.sortedEpics(),
+        features: TRELLOVIEW.sortedFeatures(),
         types: TRELLOVIEW.objectValues(TRELLOVIEW.labelTypes)
       }
       TRELLOVIEW.renderToTarget('left-navbar', TRELLOVIEW.$leftNavbar, context)
@@ -1192,30 +1192,30 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     },
 
     updateFilters: function(show) {
-      var epics = []
-      if (TRELLOVIEW.labelTypes && TRELLOVIEW.labelTypes.Epic) {
-        $.each(TRELLOVIEW.labelTypes.Epic.labels, function(index, epic) {
-          epics.push({
-            name: epic.name,
-            id: epic.id,
-            color: epic.color,
-            selected: epic.id === TRELLOVIEW.epicId,
-            cardCount: epic.cards.cards.length,
+      var features = []
+      if (TRELLOVIEW.labelTypes && TRELLOVIEW.labelTypes.Feature) {
+        $.each(TRELLOVIEW.labelTypes.Feature.labels, function(index, feature) {
+          features.push({
+            name: feature.name,
+            id: feature.id,
+            color: feature.color,
+            selected: feature.id === TRELLOVIEW.featureId,
+            cardCount: feature.cards.cards.length,
           })
         })
       }
       if (TRELLOVIEW.filtersShown && !show) {
           TRELLOWVIEW.$filters.hide()
           TRELLOVIEW.filtersShown = false
-      } else if (show && (!TRELLOVIEW.filtersShown || epics != TRELLOVIEW.shownEpics)) {
-        TRELLOVIEW.shownEpics = epics
+      } else if (show && (!TRELLOVIEW.filtersShown || features != TRELLOVIEW.shownFeatures)) {
+        TRELLOVIEW.shownFeatures = features
         TRELLOVIEW.renderToTarget('filters', TRELLOVIEW.$filters, {
           boardID: TRELLOVIEW.boardId,
           update_since: TRELLOVIEW.update_since,
           major_updates: TRELLOVIEW.major_updates,
-          epics: epics,
-          show_all_epics: !TRELLOVIEW.epicId,
-          show_no_epics: TRELLOVIEW.epicId === "NONE",
+          features: features,
+          show_all_features: !TRELLOVIEW.featureId,
+          show_no_features: TRELLOVIEW.featureId === "NONE",
           showLabels: TRELLOVIEW.showLabels,
           showChanges: TRELLOVIEW.showChanges,
           showFullChanges: TRELLOVIEW.showFullChanges,
@@ -1229,7 +1229,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     displayLists: function(brief) {
       var lists = []
       $.each(TRELLOVIEW.lists, function(key, value) {
-        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId),
+        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.featureId),
             update_since
 
         if (TRELLOVIEW.update_since) {
@@ -1257,27 +1257,27 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       })
     },
 
-    displayEpic: function() {
-      var epic = TRELLOVIEW.labels[TRELLOVIEW.epicId]
-      console.log(epic)
-      if (!epic) return
+    displayFeature: function() {
+      var feature = TRELLOVIEW.labels[TRELLOVIEW.featureId]
+      console.log(feature)
+      if (!feature) return
 
-      TRELLOVIEW.renderToTarget('epic', TRELLOVIEW.$content, {
-        epic: epic,
-        lists: epic.lists()
+      TRELLOVIEW.renderToTarget('feature', TRELLOVIEW.$content, {
+        feature: feature,
+        lists: feature.lists()
       })
     },
 
     displayStatus: function() {
-      var epics = []
-      if (TRELLOVIEW.labelTypes && TRELLOVIEW.labelTypes.Epic) {
-        $.each(TRELLOVIEW.labelTypes.Epic.labels, function(index, epic) {
-          if (epic.cards.cards.length) {
-            epics.push({
-              name: epic.name,
-              color: epic.color,
-              cardCount: epic.cards.cards.length,
-              lists: epic.lists(),
+      var features = []
+      if (TRELLOVIEW.labelTypes && TRELLOVIEW.labelTypes.Feature) {
+        $.each(TRELLOVIEW.labelTypes.Feature.labels, function(index, feature) {
+          if (feature.cards.cards.length) {
+            features.push({
+              name: feature.name,
+              color: feature.color,
+              cardCount: feature.cards.cards.length,
+              lists: feature.lists(),
             })
           }
         })
@@ -1285,7 +1285,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
 
 
       TRELLOVIEW.renderToTarget('status', TRELLOVIEW.$content, {
-        epics: epics,
+        features: features,
       })
     },
 
@@ -1325,7 +1325,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         creator: 'trelloview'
       });
 
-      $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.epicId), function(index, card) {
+      $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.featureId), function(index, card) {
         if (firstPage) {
           firstPage = false
         } else {

@@ -35,14 +35,14 @@
 <script id="template-filters" type="x-tmpl-mustache">
   <form method="GET" id="filter-form">
     <div>
-      <label for="filter_epic">Filter to epic: </label>
-      <select name="e" id="filter_epic" class="selectpicker show-tick" data-live-search="true">
-        <option value="" {{ #show_all_epics }}selected=selected{{ /show_all_epics}}>All</option>
-        <option value="NONE" {{ #show_no_epics }}selected=selected{{ /show_no_epics }}>Not tagged to any epics</option>
+      <label for="filter_feature">Filter to feature: </label>
+      <select name="e" id="filter_feature" class="selectpicker show-tick" data-live-search="true">
+        <option value="" {{ #show_all_features }}selected=selected{{ /show_all_features}}>All</option>
+        <option value="NONE" {{ #show_no_features }}selected=selected{{ /show_no_features }}>Not tagged to any features</option>
         <option data-divider="true"></option>
-        {{ #epics }}
+        {{ #features }}
           <option value="{{ id }}" {{ #selected }}selected=selected{{ /selected }} data-content="<span class='label-marker label-marker-{{ color }}'></span>{{ name }} <small>({{ cardCount }})</small>"></option>
-        {{ /epics }}
+        {{ /features }}
       </select>
     </div>
 
@@ -192,9 +192,9 @@
   </li>
 </script>
 
-<script id="template-epic" type="x-tmpl-mustache">
+<script id="template-feature" type="x-tmpl-mustache">
   <h2>
-    <span class="label-marker label-marker-{{ epic.color }}"></span>{{ epic.name }}</h2>
+    <span class="label-marker label-marker-{{ feature.color }}"></span>{{ feature.name }}</h2>
 
   <ol class="lists">
     {{ #lists }}
@@ -219,7 +219,7 @@
 </script>
 
 <script id="template-status" type="x-tmpl-mustache">
-  {{ #epics }}
+  {{ #features }}
   <div class="container">
 
     <span class="label-marker label-marker-{{ color }}"></span>{{ name }} ({{ cardCount }} cards)
@@ -236,7 +236,7 @@
     {{ /lists }}
     </table>
   </div>
-  {{ /epics }}
+  {{ /features }}
 </script>
 
 </head>
