@@ -273,7 +273,7 @@
     this.labels = this.calcLabels(cardData, sortedLabels)
     this.members = this.calcMembers(cardData, allMembers)
     this.labelsByType = this.calcLabelsByType()
-    this.feature = this.labelsByType.Feature ? this.labelsByType.Feature[0] : null 
+    this.feature = this.labelsByType.Feature ? this.labelsByType.Feature[0] : null
     this.type = this.labelsByType.Type ? this.labelsByType.Type[0] : null
     this.actions = $.map(cardData.actions, function(actionData) {
       return new Action(actionData, allMembers)
@@ -421,7 +421,7 @@
           "type": "movePosition",
         })
       }
-      
+
       if (changedDueDate) {
         results.push({
           "type": "changedDueDate",
@@ -798,6 +798,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     init: function(queryParams) {
       var key = queryParams["k"] || '4e6c185d2c22ee0f51332d0a1657eaeb'
       Trello.setKey(key)
+
+      TRELLOVIEW.authState = null
       TRELLOVIEW.boardId = queryParams["b"]
       TRELLOVIEW.view = queryParams["v"] || 'lists'
       TRELLOVIEW.featureId = queryParams["e"]
@@ -903,6 +905,63 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       }
     },
 
+    tryAuth: function() {
+      if (TRELLOVIEW.authState === 'trying') {
+        // Already trying
+        return
+      }
+      if (TRELLOVIEW.authState === 'failed') {
+        // Given up
+        return
+      }
+      if (TRELLOVIEW.authState === 'ok') {
+        // Already done
+        return
+      }
+
+      if (TRELLOVIEW.authState === null) {
+        TRELLOVIEW.authState = 'trying'
+
+        Trello.authorize({
+          interactive: false,
+          name: 'TrelloView',
+          scope: { read: true, write: true, account: false },
+          success: TRELLOVIEW.onStoredAuthOkay,
+          error: TRELLOVIEW.onStoredAuthFail,
+        })
+      } else {
+        TRELLOVIEW.authState = 'trying'
+        Trello.deauthorize()
+        Trello.authorize({
+          type: 'redirect',
+          name: 'TrelloView',
+          scope: { read: true, write: true, account: false },
+          success: TRELLOVIEW.onAuthOkay,
+          error: TRELLOVIEW.onAuthError
+        })
+      }
+    },
+
+    onStoredAuthFail: function() {
+      TRELLOVIEW.authState = 'stored'
+      TRELLOVIEW.tryAuth()
+    },
+
+    onStoredAuthOkay: function() {
+      TRELLOVIEW.authState = 'stored'
+      TRELLOVIEW.fetch()
+    },
+
+    onAuthOkay: function() {
+      TRELLOVIEW.authState = 'ok'
+      TRELLOVIEW.fetch()
+    },
+
+    onAuthError: function() {
+      TRELLOVIEW.authState = 'failed'
+      TRELLOVIEW.fetch()
+    },
+
     fetch: function() {
       TRELLOVIEW.fetchMainData()
       TRELLOVIEW.fetchLabels()
@@ -951,8 +1010,9 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     },
 
     fetchSomething: function(description, storageKey, call, success) {
-      var fullStorageKey = TRELLOVIEW.boardId + "_" + storageKey
-      var responseObj = $.jStorage.get(fullStorageKey)
+      var fullStorageKey = TRELLOVIEW.boardId + "_" + storageKey,
+          responseObj = $.jStorage.get(fullStorageKey),
+          requestAuthState = TRELLOVIEW.authState
       if (responseObj) {
         success(responseObj)
       }
@@ -968,7 +1028,13 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       ).error(
         function(error) {
           TRELLOVIEW.stopFetch(description)
-          TRELLOVIEW.ajaxError(error)
+          if (error.status === 401 &&
+              TRELLOVIEW.authState !== 'failed' &&
+              TRELLOVIEW.authState === requestAuthState) {
+            TRELLOVIEW.tryAuth()
+          } else {
+            TRELLOVIEW.ajaxError(error)
+          }
         }
       )
     },
