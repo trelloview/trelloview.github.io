@@ -102,7 +102,8 @@
             key === "idAttachmentCover" ||
             key === "pos" ||
             key === "desc" ||
-            key === "due") {
+            key === "due" ||
+            key === "closed") {
            // Minor
         } else if (key === "name") {
            isMajor = true
