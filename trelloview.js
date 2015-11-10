@@ -43,8 +43,8 @@
     "copyCard": true,
 
     /* Changing membership of the card */
-    "addMemberToCard": true,
-    "removeMemberFromCard": true,
+    "addMemberToCard": false,
+    "removeMemberFromCard": false,
   }
 
   var trelloColours = {
