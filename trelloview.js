@@ -831,6 +831,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.showChanges = queryParams["showChanges"] === "1"
       TRELLOVIEW.showUnchanged = queryParams["showUnchanged"] === "1"
       TRELLOVIEW.showFullChanges = queryParams["showFullChanges"] === "1"
+      TRELLOVIEW.reverse = queryParams["reverse"] === "1"
 
       TRELLOVIEW.loadTemplates()
       TRELLOVIEW.prepareLayout()
@@ -1348,6 +1349,9 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
           })
         }
       })
+      if (TRELLOVIEW.reverse) {
+        lists.reverse()
+      }
       TRELLOVIEW.renderToTarget('lists', TRELLOVIEW.$content, {
         lists: lists,
         brief: brief
