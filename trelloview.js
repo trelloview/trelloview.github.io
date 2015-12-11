@@ -32,6 +32,7 @@
 
     /* Comment actions */
     "commentCard": false,
+    "copyCommentCard": false,
 
     /* Attachment actions */
     "addAttachmentToCard": false,
@@ -41,6 +42,7 @@
     "moveCardToBoard": true,
     "createCard": true,
     "copyCard": true,
+    "convertToCardFromCheckItem": true,
 
     /* Changing membership of the card */
     "addMemberToCard": false,
@@ -123,7 +125,7 @@
     this.cards = new CardList
   }
 
-  CardList.prototype.filtered = function(update_since, major_updates, featureId) {
+  CardList.prototype.filtered = function(update_since, major_updates, showUnchanged, featureId) {
     var result = [], cardFeatures
 
     if (update_since) {
@@ -132,10 +134,12 @@
     $.each(this.cards, function(index, card) {
       var wanted = true
       if (update_since) {
-        if (major_updates && card.dateLastMajorActivity < update_since) {
-          wanted = false
-        } else if (card.dateLastActivity < update_since) {
-          wanted = false
+        if (!showUnchanged) {
+          if (major_updates && card.dateLastMajorActivity < update_since) {
+            wanted = false
+          } else if (card.dateLastActivity < update_since) {
+            wanted = false
+          }
         }
       }
       if (wanted && featureId) {
@@ -295,6 +299,7 @@
         movedPosition = false,
         changedDueDate = false,
         cardSource,
+        checklistSource,
         boardSource
 
     $.each(this.actions, function(index, action) {
@@ -323,7 +328,7 @@
         if (action.data.old.pos) {
           handled = true
         }
-        if (action.data.old.due) {
+        if (action.data.old.due !== undefined) {
           changedDueDate = true
           handled = true
         }
@@ -334,6 +339,11 @@
         comments.push({
           commenter: action.member,
           text: action.data.text,
+        })
+      } else if (action.type === "copyCommentCard") {
+        comments.push({
+          commenter: action.member,
+          text: "COPY:" + action.data.text,
         })
       } else if (action.type === "createCard") {
         created = true
@@ -347,6 +357,15 @@
         created = true
         created_by = action.member
         cardSource = action.data.cardSource.name
+        if (action.data.list) {
+          if (!end_list) {
+            end_list = action.list
+          }
+        }
+      } else if (action.type === "convertToCardFromCheckItem") {
+        created = true
+        created_by = action.member
+        checklistSource = action.data.cardSource.name
         if (action.data.list) {
           if (!end_list) {
             end_list = action.list
@@ -384,8 +403,10 @@
         "type": "createdBy",
         "created_by": created_by,
         "cardSource": cardSource,
+        "checklistSource": checklistSource,
         "boardSource": boardSource,
         "cardSource?": cardSource !== undefined,
+        "checklistSource?": checklistSource !== undefined,
         "boardSource?": boardSource !== undefined,
       })
     } else {
@@ -808,6 +829,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.major_updates = queryParams["major_updates"] === "1"
       TRELLOVIEW.showLabels = queryParams["showLabels"] === "1"
       TRELLOVIEW.showChanges = queryParams["showChanges"] === "1"
+      TRELLOVIEW.showUnchanged = queryParams["showUnchanged"] === "1"
       TRELLOVIEW.showFullChanges = queryParams["showFullChanges"] === "1"
 
       TRELLOVIEW.loadTemplates()
@@ -825,6 +847,8 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.$filters.on("blur", "#show_labels", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#show_changes", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("blur", "#show_changes", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("change", "#show_unchanged", TRELLOVIEW.filterFormChanged)
+      TRELLOVIEW.$filters.on("blur", "#show_unchanged", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#showFullChanges", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("blur", "#showFullChanges", TRELLOVIEW.filterFormChanged)
       TRELLOVIEW.$filters.on("change", "#filter_feature", TRELLOVIEW.filterFormChanged)
@@ -836,6 +860,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       TRELLOVIEW.major_updates = $("#major_updates").prop("checked")
       TRELLOVIEW.showLabels = $("#show_labels").prop("checked")
       TRELLOVIEW.showChanges = $("#show_changes").prop("checked")
+      TRELLOVIEW.showUnchanged = $("#show_unchanged").prop("checked")
       TRELLOVIEW.showFullChanges = $("#showFullChanges").prop("checked")
       TRELLOVIEW.featureId = $("#filter_feature").val()
       TRELLOVIEW.updateLocation()
@@ -862,6 +887,9 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
       }
       if (TRELLOVIEW.showChanges) {
         params["showChanges"] = "1"
+      }
+      if (TRELLOVIEW.showUnchanged) {
+        params["showUnchanged"] = "1"
       }
       if (TRELLOVIEW.showFullChanges) {
         params["showFullChanges"] = "1"
@@ -1285,6 +1313,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
           show_no_features: TRELLOVIEW.featureId === "NONE",
           showLabels: TRELLOVIEW.showLabels,
           showChanges: TRELLOVIEW.showChanges,
+          showUnchanged: TRELLOVIEW.showUnchanged,
           showFullChanges: TRELLOVIEW.showFullChanges,
         })
         $('.selectpicker').selectpicker()
@@ -1296,7 +1325,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
     displayLists: function(brief) {
       var lists = []
       $.each(TRELLOVIEW.lists, function(key, value) {
-        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.featureId),
+        var filteredCards = value.cards.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.showUnchanged, TRELLOVIEW.featureId),
             update_since
 
         if (TRELLOVIEW.update_since) {
@@ -1314,6 +1343,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
             },
             showLabels: TRELLOVIEW.showLabels,
             showChanges: TRELLOVIEW.showChanges,
+            showUnchanged: TRELLOVIEW.showUnchanged,
             showFullChanges: TRELLOVIEW.showFullChanges,
           })
         }
@@ -1394,7 +1424,7 @@ doc.rect(x1, y1, x2 - x1, y2 - y1)
         creator: 'trelloview'
       });
 
-      $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.featureId), function(index, card) {
+      $.each(cardlist.filtered(TRELLOVIEW.update_since, TRELLOVIEW.major_updates, TRELLOVIEW.showUnchanged, TRELLOVIEW.featureId), function(index, card) {
         if (firstPage) {
           firstPage = false
         } else {

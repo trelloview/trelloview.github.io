@@ -61,6 +61,9 @@
       <input type="checkbox" name="show_changes" id="show_changes" {{ #showChanges }} checked {{ /showChanges }}>
       <label for="show_changes">Show changes</label>
       <br>
+      <input type="checkbox" name="show_unchanged" id="show_unchanged" {{ #showUnchanged }} checked {{ /showUnchanged }}>
+      <label for="show_unchanged">Include cards that haven't changed</label>
+      <br>
       <input type="checkbox" name="showFullChanges" id="showFullChanges" {{ #showFullChanges }} checked {{ /showFullChanges }}>
       <label for="showFullChanges">Show full changes</label>
     </div>
@@ -95,8 +98,19 @@
         {{ /brief }}
         <ol>
         {{ #cards }}
-          <li>
-            <a href="{{ shortUrl }}">#{{ idShort }}: {{ name }}</a>
+          <li class="panel panel-default">
+            <div class="panel-heading">
+              <div class="panel-title">
+                <a href="{{ shortUrl }}">#{{ idShort }}: {{ name }}</a>
+              </div>
+
+              <div>
+                {{ #members }}
+                  <span class="label label-default">{{ fullName }}</span>
+                {{ /members }}
+              </div>
+            </div>
+            <div class="panel-body">
             {{ #showLabels }}
               <ol>
               {{ #labels }}
@@ -109,6 +123,7 @@
               {{ &renderChanges }}
               </ol>
             {{ /showChanges }}
+            </div>
           </li>
         {{ /cards }}
         </ol>
@@ -142,6 +157,9 @@
 <script id="template-change-createdBy" type="x-tmpl-mustache">
   <li>
     Created by {{ created_by.fullName }}
+    {{ #checklistSource? }}
+      (created from checklist item in <q>{{ checklistSource }}</q>)
+    {{ /checklistSource? }}
     {{ #cardSource? }}
       (copied from <q>{{ cardSource }}</q>)
     {{ /cardSource? }}
@@ -168,13 +186,13 @@
   <li>
     {{ comments.length }} comments added
     {{ #showFullChanges }}
-    <table>
+    <ul class="list-group">
     {{ #comments }}
-      <tr>
-        <th>{{ commenter.fullName }}:</th>
-        <td>{{ text }}</td>
-      </tr>
-    {{ /comments }}</table>
+      <li class="list-group-item">
+        <b>{{ commenter.fullName }}:</b>
+        {{ text }}
+      </li>
+    {{ /comments }}</ul>
     {{ /showFullChanges }}
   </li>
 </script>
